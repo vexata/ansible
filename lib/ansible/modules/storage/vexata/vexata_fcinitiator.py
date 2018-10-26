@@ -1,0 +1,167 @@
+#!/usr/bin/python
+# -*- coding: utf-8 -*-
+
+# (c) 2018, Sandeep Kasargod (sandeep@vexata.com)
+# GNU General Public License v3.0+ (see COPYING or https://www.gnu.org/licenses/gpl-3.0.txt)
+
+from __future__ import absolute_import, division, print_function
+__metaclass__ = type
+
+
+ANSIBLE_METADATA = {'metadata_version': '1.1',
+                    'status': ['preview'],
+                    'supported_by': 'community'}
+
+
+DOCUMENTATION = '''
+---
+module: vexata_fcinitiator
+version_added: 2.8
+short_description: Manage FC initiators on Vexata VX100 storage arrays.
+description:
+    - Adds or removes FC initiators on a Vexata VX100 array.
+author: Sandeep Kasargod
+options:
+  name:
+    description:
+    - Initiator name.
+    required: true
+  state:
+    description:
+    - Add initiator when present or remove when absent.
+    - Initiators that are in one or more initiator groups cannot be deleted
+      without first deleting those initiator groups.
+    default: present
+    choices: [ present, absent ]
+  wwn:
+    description:
+    - FC wwn of Host HBA port for adding a new initiator.
+extends_documentation_fragment:
+    - vexata.vx100
+'''
+
+EXAMPLES = '''
+- name: Add initiator named host1fc1 for host HBA port
+  vexata_initiator:
+    name: host1fc1
+    wwn: "00:01:02:03:04:05:06:07"
+    state: present
+    array: vx100_ultra.test.com
+    user: admin
+    password: secret
+
+- name: Remove initiator named host1fc1
+  vexata_initiator:
+    name: host1fc1
+    state: absent
+    array: vx100_ultra.test.com
+    user: admin
+    password: secret
+'''
+
+RETURN = '''
+'''
+
+from ansible.module_utils.basic import AnsibleModule
+from ansible.module_utils.vexata import (
+    HAS_VEXATAPI, VXOS_VERSION, argument_spec, get_array, required_together)
+
+
+def check_wwn(wwn):
+    wwn = wwn.replace(':', '').lower()
+    if len(wwn) != 16:
+        return False
+    allhex = all(ch in '0123456789abcdef' for ch in wwn)
+    return allhex
+
+
+def get_initiator(module, array):
+    """Retrieve a named initiator if it exists, None if absent."""
+    name = module.params['name']
+    try:
+        inis = array.list_initiators()
+        ini = filter(lambda i: i['name'] == name, inis)
+        if len(ini) == 1:
+            return ini[0]
+        else:
+            return None
+    except Exception:
+        module.fail_json(msg='Error while attempting to retrieve initiators.')
+
+
+def add_initiator(module, array):
+    """"Add a host FC initiator."""
+    changed = False
+    wwn = module.params['wwn']
+    if module.check_mode:
+        module.exit_json(changed=changed)
+
+    try:
+        ini = array.add_initiator(
+            module.params['name'],
+            'Ansible FC initiator',
+            wwn)
+        if ini:
+            module.log(msg='Added initiator {0}'.format(ini['id']))
+            changed = True
+        else:
+            module.fail_json(msg='Initiator add failed.')
+    except Exception:
+        pass
+    module.exit_json(changed=changed)
+
+
+def remove_initiator(module, array, ini):
+    changed = False
+    if module.check_mode:
+        module.exit_json(changed=changed)
+
+    try:
+        ok = array.remove_initiator(
+            ini['id'])
+        if ok:
+            module.log(msg='Initiator removed.')
+            changed = True
+        else:
+            module.fail_json(msg='Initiator remove failed.')
+    except Exception:
+        pass
+    module.exit_json(changed=changed)
+
+
+def main():
+    arg_spec = argument_spec()
+    arg_spec.update(
+        dict(
+            name=dict(type='str', required=True),
+            state=dict(default='present', choices=['present', 'absent']),
+            wwn=dict(type='str')
+        )
+    )
+
+    module = AnsibleModule(arg_spec,
+                           supports_check_mode=True,
+                           required_together=required_together())
+
+    if not HAS_VEXATAPI:
+        module.fail_json(msg='vexatapi library is required for this module. '
+                             'To install, use `pip install vexatapi`')
+
+    state = module.params['state']
+    wwn = module.params['wwn']
+    if wwn and not check_wwn(wwn):
+        module.fail_json(msg='wwn should have aa:bb:cc:dd:ee:ff:00:11 format')
+
+    array = get_array(module)
+    ini = get_initiator(module, array)
+
+    if state == 'present' and wwn and not ini:
+        add_initiator(module, array)
+    elif state == 'absent' and ini:
+        remove_initiator(module, array, ini)
+    else:
+        module.exit_json(changed=False)
+
+
+if __name__ == '__main__':
+    main()
