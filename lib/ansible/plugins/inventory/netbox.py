@@ -49,6 +49,7 @@ DOCUMENTATION = '''
                 - device_roles
                 - device_types
                 - manufacturers
+                - platforms
             default: []
         query_filters:
             description: List of parameters passed to the query string (Multiple values may be separated by commas)
@@ -70,6 +71,7 @@ EXAMPLES = '''
 
 plugin: netbox
 api_endpoint: http://localhost:8000
+validate_certs: True
 group_by:
   - device_roles
 query_filters:
@@ -151,7 +153,7 @@ class InventoryModule(BaseInventoryPlugin, Constructable):
     NAME = 'netbox'
 
     def _fetch_information(self, url):
-        response = open_url(url, headers=self.headers, timeout=self.timeout)
+        response = open_url(url, headers=self.headers, timeout=self.timeout, validate_certs=self.validate_certs)
 
         try:
             raw_data = to_text(response.read(), errors='surrogate_or_strict')
@@ -194,7 +196,9 @@ class InventoryModule(BaseInventoryPlugin, Constructable):
             "memory": self.extract_memory,
             "vcpus": self.extract_vcpus,
             "device_roles": self.extract_device_role,
+            "platforms": self.extract_platform,
             "device_types": self.extract_device_type,
+            "config_context": self.extract_config_context,
             "manufacturers": self.extract_manufacturer
         }
 
@@ -206,6 +210,12 @@ class InventoryModule(BaseInventoryPlugin, Constructable):
 
     def extract_memory(self, host):
         return host.get("memory")
+
+    def extract_platform(self, host):
+        try:
+            return self.platforms_lookup[host["platform"]["id"]]
+        except Exception:
+            return
 
     def extract_device_type(self, host):
         try:
@@ -234,6 +244,14 @@ class InventoryModule(BaseInventoryPlugin, Constructable):
     def extract_device_role(self, host):
         try:
             return [self.device_roles_lookup[host["device_role"]["id"]]]
+        except Exception:
+            return
+
+    def extract_config_context(self, host):
+        try:
+            url = urljoin(self.api_endpoint, "/api/dcim/devices/" + str(host["id"]))
+            device_lookup = self._fetch_information(url)
+            return [device_lookup["config_context"]]
         except Exception:
             return
 
@@ -266,6 +284,11 @@ class InventoryModule(BaseInventoryPlugin, Constructable):
 
     def extract_tags(self, host):
         return host["tags"]
+
+    def refresh_platforms_lookup(self):
+        url = urljoin(self.api_endpoint, "/api/dcim/platforms/?limit=0")
+        platforms = self.get_resource_list(api_url=url)
+        self.platforms_lookup = dict((platform["id"], platform["name"]) for platform in platforms)
 
     def refresh_sites_lookup(self):
         url = urljoin(self.api_endpoint, "/api/dcim/sites/?limit=0")
@@ -338,13 +361,13 @@ class InventoryModule(BaseInventoryPlugin, Constructable):
 
     def refresh_url(self):
         query_parameters = [("limit", 0)]
-        query_parameters.extend(filter(lambda x: x,
-                                       map(self.validate_query_parameters, self.query_filters)))
-        self.device_url = self.api_endpoint + "/api/dcim/devices/" + "?" + urlencode(query_parameters)
-        self.virtual_machines_url = "".join([self.api_endpoint,
-                                             "/api/virtualization/virtual-machines/",
-                                             "?",
-                                             urlencode(query_parameters)])
+        if self.query_filters:
+            query_parameters.extend(filter(lambda x: x,
+                                           map(self.validate_query_parameters, self.query_filters)))
+        self.device_url = urljoin(self.api_endpoint,
+                                  "/api/dcim/devices/?" + urlencode(query_parameters))
+        self.virtual_machines_url = urljoin(self.api_endpoint,
+                                            "/api/virtualization/virtual-machines/?" + urlencode(query_parameters))
 
     def fetch_hosts(self):
         return chain(
@@ -414,6 +437,7 @@ class InventoryModule(BaseInventoryPlugin, Constructable):
         token = self.get_option("token")
         self.api_endpoint = self.get_option("api_endpoint")
         self.timeout = self.get_option("timeout")
+        self.validate_certs = self.get_option("validate_certs")
         self.headers = {
             'Authorization': "Token %s" % token,
             'User-Agent': "ansible %s Python %s" % (ansible_version, python_version.split(' ')[0]),

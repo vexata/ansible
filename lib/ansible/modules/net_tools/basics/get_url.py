@@ -180,7 +180,9 @@ EXAMPLES = r'''
   get_url:
     url: http://example.com/path/file.conf
     dest: /etc/foo.conf
-    headers: 'key:value,key:value'
+    headers:
+      key1: one
+      key2: two
 
 - name: Download file with check (sha256)
   get_url:
@@ -490,7 +492,7 @@ def main():
                     checksum = None
 
                 if checksum is None:
-                    module.fail_json("Unable to find a checksum for file '%s' in '%s'" % (filename, checksum_url))
+                    module.fail_json(msg="Unable to find a checksum for file '%s' in '%s'" % (filename, checksum_url))
             # Remove any non-alphanumeric characters, including the infamous
             # Unicode zero-width space
             checksum = re.sub(r'\W+', '', checksum).lower()
