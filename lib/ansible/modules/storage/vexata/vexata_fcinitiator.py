@@ -1,7 +1,7 @@
 #!/usr/bin/python
 # -*- coding: utf-8 -*-
 
-# (c) 2018, Sandeep Kasargod (sandeep@vexata.com)
+# Copyright: (c) 2018, Sandeep Kasargod (sandeep@vexata.com)
 # GNU General Public License v3.0+ (see COPYING or https://www.gnu.org/licenses/gpl-3.0.txt)
 
 from __future__ import absolute_import, division, print_function
@@ -17,10 +17,11 @@ DOCUMENTATION = '''
 ---
 module: vexata_fcinitiator
 version_added: 2.8
-short_description: Manage FC initiators on Vexata VX100 storage arrays.
+short_description: Manage Fibre Channel initiators on Vexata VX100 storage arrays
 description:
-    - Adds or removes FC initiators on a Vexata VX100 array.
-author: Sandeep Kasargod
+    - Adds or removes Fibre Channel (FC) initiators on a Vexata VX100 array.
+author:
+  - Sandeep Kasargod (@vexata)
 options:
   name:
     description:
@@ -44,7 +45,7 @@ EXAMPLES = '''
 - name: Add initiator named host1fc1 for host HBA port
   vexata_initiator:
     name: host1fc1
-    wwn: "00:01:02:03:04:05:06:07"
+    wwn: "01:23:45:67:89:ab:cd:ef"
     state: present
     array: vx100_ultra.test.com
     user: admin
@@ -64,7 +65,7 @@ RETURN = '''
 
 from ansible.module_utils.basic import AnsibleModule
 from ansible.module_utils.vexata import (
-    HAS_VEXATAPI, VXOS_VERSION, argument_spec, get_array, required_together)
+    argument_spec, get_array, required_together)
 
 
 def check_wwn(wwn):
@@ -143,14 +144,10 @@ def main():
                            supports_check_mode=True,
                            required_together=required_together())
 
-    if not HAS_VEXATAPI:
-        module.fail_json(msg='vexatapi library is required for this module. '
-                             'To install, use `pip install vexatapi`')
-
     state = module.params['state']
     wwn = module.params['wwn']
     if wwn and not check_wwn(wwn):
-        module.fail_json(msg='wwn should have aa:bb:cc:dd:ee:ff:00:11 format')
+        module.fail_json(msg='wwn should have 01:23:45:67:89:ab:cd:ef format')
 
     array = get_array(module)
     ini = get_initiator(module, array)

@@ -1,7 +1,7 @@
 #!/usr/bin/python
 # -*- coding: utf-8 -*-
 
-# (c) 2018, Sandeep Kasargod (sandeep@vexata.com)
+# Copyright: (c) 2018, Sandeep Kasargod (sandeep@vexata.com)
 # GNU General Public License v3.0+ (see COPYING or https://www.gnu.org/licenses/gpl-3.0.txt)
 
 from __future__ import absolute_import, division, print_function
@@ -27,7 +27,8 @@ description:
     group after the snapshot was created. If the volumes were added or removed
     from the volume group after the snapshot group was created, the restore
     operation will fail.
-author: Sandeep Kasargod
+author:
+  - Sandeep Kasargod (@vexata)
 options:
   name:
     description:
@@ -95,7 +96,7 @@ RETURN = '''
 
 from ansible.module_utils.basic import AnsibleModule
 from ansible.module_utils.vexata import (
-    HAS_VEXATAPI, VXOS_VERSION, argument_spec, get_array, required_together)
+    argument_spec, get_array, required_together)
 
 
 def get_vg(module, array):
@@ -233,10 +234,6 @@ def main():
     module = AnsibleModule(arg_spec,
                            supports_check_mode=True,
                            required_together=required_together())
-
-    if not HAS_VEXATAPI:
-        module.fail_json(msg='vexatapi library is required for this module. '
-                             'To install, use `pip install vexatapi`')
 
     array = get_array(module)
     vg = get_vg(module, array)
