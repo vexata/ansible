@@ -63,17 +63,23 @@ EXAMPLES = '''
 RETURN = '''
 '''
 
+import re
+
 from ansible.module_utils.basic import AnsibleModule
 from ansible.module_utils.vexata import (
     argument_spec, get_array, required_together)
 
+WWN_RE = re.compile(r'(?:[0-9a-f]{2}:){7}[0-9a-f]{2}')
 
-def check_wwn(wwn):
-    wwn = wwn.replace(':', '').lower()
-    if len(wwn) != 16:
-        return False
-    allhex = all(ch in '0123456789abcdef' for ch in wwn)
-    return allhex
+
+def validate_wwn(module, err_msg):
+    wwn = module.params.get('wwn', False)
+    if not wwn:
+        module.fail_json(msg=err_msg)
+    wwn = wwn.strip().lower()
+    if not WWN_RE.match(wwn):
+        module.fail_json(msg='wwn should have 01:23:45:67:89:ab:cd:ef format')
+    return wwn
 
 
 def get_initiator(module, array):
@@ -93,7 +99,7 @@ def get_initiator(module, array):
 def add_initiator(module, array):
     """"Add a host FC initiator."""
     changed = False
-    wwn = module.params['wwn']
+    wwn = validate_wwn(module, 'wwn is required for adding initiator.')
     if module.check_mode:
         module.exit_json(changed=changed)
 
@@ -145,14 +151,10 @@ def main():
                            required_together=required_together())
 
     state = module.params['state']
-    wwn = module.params['wwn']
-    if wwn and not check_wwn(wwn):
-        module.fail_json(msg='wwn should have 01:23:45:67:89:ab:cd:ef format')
-
     array = get_array(module)
     ini = get_initiator(module, array)
 
-    if state == 'present' and wwn and not ini:
+    if state == 'present' and not ini:
         add_initiator(module, array)
     elif state == 'absent' and ini:
         remove_initiator(module, array, ini)

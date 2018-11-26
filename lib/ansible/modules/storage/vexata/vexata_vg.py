@@ -210,10 +210,11 @@ def main():
     array = get_array(module)
     vg = get_vg(module, array)
 
-    if state == 'present' and not vg:
-        create_vg(module, array)
-    elif state == 'present' and vg:
-        update_vg(module, array, vg)
+    if state == 'present':
+        if not vg:
+            create_vg(module, array)
+        else:
+            update_vg(module, array, vg)
     elif state == 'absent' and vg:
         delete_vg(module, array, vg)
     else:

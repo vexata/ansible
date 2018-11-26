@@ -223,10 +223,11 @@ def main():
     array = get_array(module)
     ig = get_ig(module, array)
 
-    if state == 'present' and not ig:
-        create_ig(module, array)
-    elif state == 'present' and ig:
-        update_ig(module, array, ig)
+    if state == 'present':
+        if not ig:
+            create_ig(module, array)
+        else:
+            update_ig(module, array, ig)
     elif state == 'absent' and ig:
         delete_ig(module, array, ig)
     else:

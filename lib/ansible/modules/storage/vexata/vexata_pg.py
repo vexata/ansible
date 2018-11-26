@@ -219,10 +219,11 @@ def main():
     array = get_array(module)
     pg = get_pg(module, array)
 
-    if state == 'present' and not pg:
-        create_pg(module, array)
-    elif state == 'present' and pg:
-        update_pg(module, array, pg)
+    if state == 'present':
+        if not pg:
+            create_pg(module, array)
+        else:
+            update_pg(module, array, pg)
     elif state == 'absent' and pg:
         delete_pg(module, array, pg)
     else:
