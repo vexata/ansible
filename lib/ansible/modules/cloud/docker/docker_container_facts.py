@@ -30,25 +30,18 @@ options:
     description:
       - The name of the container to inspect.
       - When identifying an existing container name may be a name or a long or short container ID.
-    required: true
+    type: str
+    required: yes
 extends_documentation_fragment:
-    - docker
+  - docker
+  - docker.docker_py_1_documentation
 
 author:
-    - "Felix Fontein (@felixfontein)"
+  - "Felix Fontein (@felixfontein)"
 
 requirements:
-    - "python >= 2.6"
-    - "docker-py >= 1.8.0"
-    - "Please note that the L(docker-py,https://pypi.org/project/docker-py/) Python
-       module has been superseded by L(docker,https://pypi.org/project/docker/)
-       (see L(here,https://github.com/docker/docker-py/issues/1310) for details).
-       For Python 2.6, C(docker-py) must be used. Otherwise, it is recommended to
-       install the C(docker) Python module. Note that both modules should I(not)
-       be installed at the same time. Also note that when both modules are installed
-       and one of them is uninstalled, the other might no longer function and a
-       reinstall of it is required."
-    - "Docker API >= 1.20"
+  - "docker-py >= 1.8.0"
+  - "Docker API >= 1.20"
 '''
 
 EXAMPLES = '''
@@ -63,7 +56,7 @@ EXAMPLES = '''
 
 - name: Print information about container
   debug:
-    var: result.docker_container
+    var: result.container
   when: result.exists
 '''
 
@@ -74,10 +67,10 @@ exists:
     type: bool
     returned: always
     sample: true
-docker_container:
+container:
     description:
       - Facts representing the current state of the container. Matches the docker inspection output.
-      - Will be empty if container does not exist.
+      - Will be C(None) if container does not exist.
     returned: always
     type: dict
     sample: '{
@@ -114,7 +107,7 @@ docker_container:
     }'
 '''
 
-from ansible.module_utils.docker_common import AnsibleDockerClient
+from ansible.module_utils.docker.common import AnsibleDockerClient
 
 
 def main():
@@ -133,7 +126,7 @@ def main():
     client.module.exit_json(
         changed=False,
         exists=(True if container else False),
-        docker_container=container,
+        container=container,
     )
 
 

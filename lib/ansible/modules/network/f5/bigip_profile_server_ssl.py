@@ -132,12 +132,12 @@ RETURN = r'''
 ciphers:
   description: The ciphers applied to the profile.
   returned: changed
-  type: string
+  type: str
   sample: "!SSLv3:!SSLv2:ECDHE+AES-GCM+SHA256:ECDHE-RSA-AES128-CBC-SHA"
 secure_renegotation:
   description: The method of secure SSL renegotiation.
   returned: changed
-  type: string
+  type: str
   sample: request
 '''
 
@@ -533,7 +533,7 @@ class ModuleManager(object):
         except ValueError as ex:
             raise F5ModuleError(str(ex))
 
-        if 'code' in response and response['code'] in [400, 403]:
+        if 'code' in response and response['code'] in [400, 403, 404]:
             if 'message' in response:
                 raise F5ModuleError(response['message'])
             else:
@@ -552,7 +552,7 @@ class ModuleManager(object):
         except ValueError as ex:
             raise F5ModuleError(str(ex))
 
-        if 'code' in response and response['code'] == 400:
+        if 'code' in response and response['code'] in [400, 404]:
             if 'message' in response:
                 raise F5ModuleError(response['message'])
             else:

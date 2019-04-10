@@ -1,6 +1,7 @@
 ---
 name: ✨ Feature request
 about: Suggest an idea for this project
+labels: feature
 ---
 <!--- Verify first that your feature was not already discussed on GitHub -->
 <!--- Complete *all* sections as described, this form is processed automatically -->
@@ -12,7 +13,7 @@ about: Suggest an idea for this project
 - Feature Idea
 
 ##### COMPONENT NAME
-<!--- Write the short name of the new feature, module, plugin or task below -->
+<!--- Write the short name of the module, plugin, task or feature below, use your best guess if unsure -->
 
 ##### ADDITIONAL INFORMATION
 <!--- Describe how the feature would be used, why it is needed and what it would solve -->

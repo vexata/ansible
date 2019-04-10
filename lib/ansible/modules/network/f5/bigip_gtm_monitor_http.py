@@ -144,28 +144,31 @@ EXAMPLES = r'''
     port: 80
     send: my send string
     receive: my receive string
-    password: secret
-    server: lb.mydomain.com
     state: present
-    user: admin
+    provider:
+      user: admin
+      password: secret
+      server: lb.mydomain.com
   delegate_to: localhost
 
 - name: Remove HTTP Monitor
   bigip_gtm_monitor_http:
     name: my_monitor
     state: absent
-    server: lb.mydomain.com
-    user: admin
-    password: secret
+    provider:
+      user: admin
+      password: secret
+      server: lb.mydomain.com
   delegate_to: localhost
 
 - name: Add HTTP monitor for all addresses, port 514
   bigip_gtm_monitor_http:
     name: my_monitor
-    server: lb.mydomain.com
-    user: admin
     port: 514
-    password: secret
+    provider:
+      user: admin
+      password: secret
+      server: lb.mydomain.com
   delegate_to: localhost
 '''
 
@@ -173,17 +176,17 @@ RETURN = r'''
 parent:
   description: New parent template of the monitor.
   returned: changed
-  type: string
+  type: str
   sample: http
 ip:
   description: The new IP of IP/port definition.
   returned: changed
-  type: string
+  type: str
   sample: 10.12.13.14
 port:
   description: The new port the monitor checks the resource on.
   returned: changed
-  type: string
+  type: str
   sample: 8080
 interval:
   description: The new interval in which to run the monitor check.
@@ -203,12 +206,12 @@ ignore_down_response:
 send:
   description: The new send string for this monitor.
   returned: changed
-  type: string
+  type: str
   sample: tcp string to send
 receive:
   description: The new receive string for this monitor.
   returned: changed
-  type: string
+  type: str
   sample: tcp string to receive
 probe_timeout:
   description: The new timeout in which the system will timeout the monitor probe.

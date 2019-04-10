@@ -51,7 +51,7 @@ extends_documentation_fragment:
 '''
 
 EXAMPLES = r'''
-- name: Delete exisitng array_admin directory service role
+- name: Delete existing array_admin directory service role
   purefb_dsrole:
     role: array_admin
     state: absent
@@ -59,7 +59,7 @@ EXAMPLES = r'''
     api_token: e31060a7-21fc-e277-6240-25983c6c4592
 
 - name: Create array_admin directory service role
-  purefa_ds:
+  purefb_dsrole:
     role: array_admin
     group_base: "OU=PureGroups,OU=SANManagers"
     group: pureadmins
@@ -67,7 +67,7 @@ EXAMPLES = r'''
     api_token: e31060a7-21fc-e277-6240-25983c6c4592
 
 - name: Update ops_admin directory service role
-  purefa_ds:
+  purefb_dsrole:
     role: ops_admin
     group_base: "OU=PureGroups"
     group: opsgroup
@@ -100,7 +100,7 @@ def update_role(module, blade):
             blade.directory_services.update_directory_services_roles(names=[module.params['role']],
                                                                      directory_service_role=role)
             changed = True
-        except:
+        except Exception:
             module.fail_json(msg='Update Directory Service Role {0} failed'.format(module.params['role']))
     module.exit_json(changed=changed)
 
@@ -114,7 +114,7 @@ def delete_role(module, blade):
         blade.directory_services.update_directory_services_roles(names=[module.params['role']],
                                                                  directory_service_role=role)
         changed = True
-    except:
+    except Exception:
         module.fail_json(msg='Delete Directory Service Role {0} failed'.format(module.params['role']))
     module.exit_json(changed=changed)
 
@@ -128,7 +128,7 @@ def create_role(module, blade):
         blade.directory_services.update_directory_services_roles(names=[module.params['role']],
                                                                  directory_service_role=role)
         changed = True
-    except:
+    except Exception:
         module.fail_json(msg='Create Directory Service Role {0} failed: Check configuration'.format(module.params['role']))
     module.exit_json(changed=changed)
 

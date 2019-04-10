@@ -216,55 +216,60 @@ EXAMPLES = r'''
 - name: Create client SSL profile
   bigip_profile_client_ssl:
     state: present
-    server: lb.mydomain.com
-    user: admin
-    password: secret
     name: my_profile
+    provider:
+      server: lb.mydomain.com
+      user: admin
+      password: secret
   delegate_to: localhost
 
 - name: Create client SSL profile with specific ciphers
   bigip_profile_client_ssl:
     state: present
-    server: lb.mydomain.com
-    user: admin
-    password: secret
     name: my_profile
     ciphers: "!SSLv3:!SSLv2:ECDHE+AES-GCM+SHA256:ECDHE-RSA-AES128-CBC-SHA"
+    provider:
+      server: lb.mydomain.com
+      user: admin
+      password: secret
   delegate_to: localhost
 
 - name: Create client SSL profile with specific SSL options
   bigip_profile_client_ssl:
     state: present
-    server: lb.mydomain.com
-    user: admin
-    password: secret
     name: my_profile
     options:
       - no-sslv2
       - no-sslv3
+    provider:
+      server: lb.mydomain.com
+      user: admin
+      password: secret
   delegate_to: localhost
 
 - name: Create client SSL profile require secure renegotiation
   bigip_profile_client_ssl:
     state: present
-    server: lb.mydomain.com
-    user: admin
-    password: secret
     name: my_profile
     secure_renegotation: request
+    provider:
+      server: lb.mydomain.com
+      user: admin
+      password: secret
   delegate_to: localhost
 
 - name: Create a client SSL profile with a cert/key/chain setting
   bigip_profile_client_ssl:
     state: present
-    server: lb.mydomain.com
-    user: admin
-    password: secret
     name: my_profile
     cert_key_chain:
       - cert: bigip_ssl_cert1
         key: bigip_ssl_key1
         chain: bigip_ssl_cert1
+    provider:
+      server: lb.mydomain.com
+      user: admin
+      password: secret
   delegate_to: localhost
 '''
 
@@ -272,7 +277,7 @@ RETURN = r'''
 ciphers:
   description: The ciphers applied to the profile.
   returned: changed
-  type: string
+  type: str
   sample: "!SSLv3:!SSLv2:ECDHE+AES-GCM+SHA256:ECDHE-RSA-AES128-CBC-SHA"
 options:
   description: The list of options for SSL processing.
@@ -282,7 +287,7 @@ options:
 secure_renegotation:
   description: The method of secure SSL renegotiation.
   returned: changed
-  type: string
+  type: str
   sample: request
 allow_non_ssl:
   description: Acceptance of non-SSL connections.
@@ -705,7 +710,7 @@ class Difference(object):
         if self.have.options is None:
             return self.want.options
         if set(self.want.options) != set(self.have.options):
-                return self.want.options
+            return self.want.options
 
     @property
     def sni_require(self):
@@ -873,7 +878,7 @@ class ModuleManager(object):
         except ValueError as ex:
             raise F5ModuleError(str(ex))
 
-        if 'code' in response and response['code'] in [400, 403]:
+        if 'code' in response and response['code'] in [400, 403, 404]:
             if 'message' in response:
                 raise F5ModuleError(response['message'])
             else:
@@ -892,7 +897,7 @@ class ModuleManager(object):
         except ValueError as ex:
             raise F5ModuleError(str(ex))
 
-        if 'code' in response and response['code'] == 400:
+        if 'code' in response and response['code'] in [400, 404]:
             if 'message' in response:
                 raise F5ModuleError(response['message'])
             else:

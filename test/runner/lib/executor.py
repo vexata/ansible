@@ -7,7 +7,6 @@ import os
 import collections
 import datetime
 import re
-import tempfile
 import time
 import textwrap
 import functools
@@ -35,6 +34,7 @@ from lib.cloud import (
     cloud_init,
     get_cloud_environment,
     get_cloud_platforms,
+    CloudEnvironmentConfig,
 )
 
 from lib.util import (
@@ -55,6 +55,7 @@ from lib.util import (
     generate_pip_command,
     find_python,
     get_docker_completion,
+    named_temporary_file,
 )
 
 from lib.docker_util import (
@@ -108,12 +109,18 @@ from lib.metadata import (
     ChangeDescription,
 )
 
+from lib.integration import (
+    integration_test_environment,
+    integration_test_config_file,
+)
+
 SUPPORTED_PYTHON_VERSIONS = (
     '2.6',
     '2.7',
     '3.5',
     '3.6',
     '3.7',
+    '3.8',
 )
 
 HTTPTESTER_HOSTS = (
@@ -318,9 +325,11 @@ def command_posix_integration(args):
     """
     :type args: PosixIntegrationConfig
     """
+    filename = 'test/integration/inventory'
+
     all_targets = tuple(walk_posix_integration_targets(include_hidden=True))
     internal_targets = command_integration_filter(args, all_targets)
-    command_integration_filtered(args, internal_targets, all_targets)
+    command_integration_filtered(args, internal_targets, all_targets, filename)
 
 
 def command_network_integration(args):
@@ -381,7 +390,7 @@ def command_network_integration(args):
     success = False
 
     try:
-        command_integration_filtered(args, internal_targets, all_targets)
+        command_integration_filtered(args, internal_targets, all_targets, filename)
         success = True
     finally:
         if args.remote_terminate == 'always' or (args.remote_terminate == 'success' and success):
@@ -577,9 +586,9 @@ def command_windows_integration(args):
                     manage = ManageWindowsCI(remote)
                     manage.upload("test/runner/setup/windows-httptester.ps1", watcher_path)
 
-                    # need to use -Command as we cannot pass an array of values with -File
-                    script = "powershell.exe -NoProfile -ExecutionPolicy Bypass -Command .\\%s -Hosts %s" \
-                             % (watcher_path, ", ".join(HTTPTESTER_HOSTS))
+                    # We cannot pass an array of string with -File so we just use a delimiter for multiple values
+                    script = "powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\\%s -Hosts \"%s\"" \
+                             % (watcher_path, "|".join(HTTPTESTER_HOSTS))
                     if args.verbosity > 3:
                         script += " -Verbose"
                     manage.ssh(script, options=ssh_options, force_pty=False)
@@ -594,7 +603,7 @@ def command_windows_integration(args):
                 for remote in [r for r in remotes if r.version != '2008']:
                     # delete the tmp file that keeps the http-tester alive
                     manage = ManageWindowsCI(remote)
-                    manage.ssh("del %s /F /Q" % watcher_path)
+                    manage.ssh("cmd.exe /c \"del %s /F /Q\"" % watcher_path, force_pty=False)
 
             watcher_path = "ansible-test-http-watcher-%s.ps1" % time.time()
             pre_target = forward_ssh_ports
@@ -603,7 +612,7 @@ def command_windows_integration(args):
     success = False
 
     try:
-        command_integration_filtered(args, internal_targets, all_targets, pre_target=pre_target,
+        command_integration_filtered(args, internal_targets, all_targets, filename, pre_target=pre_target,
                                      post_target=post_target)
         success = True
     finally:
@@ -766,11 +775,12 @@ def command_integration_filter(args, targets, init_callback=None):
     return internal_targets
 
 
-def command_integration_filtered(args, targets, all_targets, pre_target=None, post_target=None):
+def command_integration_filtered(args, targets, all_targets, inventory_path, pre_target=None, post_target=None):
     """
     :type args: IntegrationConfig
     :type targets: tuple[IntegrationTarget]
     :type all_targets: tuple[IntegrationTarget]
+    :type inventory_path: str
     :type pre_target: (IntegrationTarget) -> None | None
     :type post_target: (IntegrationTarget) -> None | None
     """
@@ -848,11 +858,11 @@ def command_integration_filtered(args, targets, all_targets, pre_target=None, po
                     if cloud_environment:
                         cloud_environment.setup_once()
 
-                    run_setup_targets(args, test_dir, target.setup_once, all_targets_dict, setup_targets_executed, False)
+                    run_setup_targets(args, test_dir, target.setup_once, all_targets_dict, setup_targets_executed, inventory_path, False)
 
                     start_time = time.time()
 
-                    run_setup_targets(args, test_dir, target.setup_always, all_targets_dict, setup_targets_executed, True)
+                    run_setup_targets(args, test_dir, target.setup_always, all_targets_dict, setup_targets_executed, inventory_path, True)
 
                     if not args.explain:
                         # create a fresh test directory for each test target
@@ -864,9 +874,9 @@ def command_integration_filtered(args, targets, all_targets, pre_target=None, po
 
                     try:
                         if target.script_path:
-                            command_integration_script(args, target, test_dir)
+                            command_integration_script(args, target, test_dir, inventory_path)
                         else:
-                            command_integration_role(args, target, start_at_task, test_dir)
+                            command_integration_role(args, target, start_at_task, test_dir, inventory_path)
                             start_at_task = None
                     finally:
                         if post_target:
@@ -1070,13 +1080,14 @@ rdr pass inet proto tcp from any to any port 443 -> 127.0.0.1 port 8443
         raise ApplicationError('No supported port forwarding mechanism detected.')
 
 
-def run_setup_targets(args, test_dir, target_names, targets_dict, targets_executed, always):
+def run_setup_targets(args, test_dir, target_names, targets_dict, targets_executed, inventory_path, always):
     """
     :type args: IntegrationConfig
     :type test_dir: str
     :type target_names: list[str]
     :type targets_dict: dict[str, IntegrationTarget]
     :type targets_executed: set[str]
+    :type inventory_path: str
     :type always: bool
     """
     for target_name in target_names:
@@ -1091,33 +1102,38 @@ def run_setup_targets(args, test_dir, target_names, targets_dict, targets_execut
             make_dirs(test_dir)
 
         if target.script_path:
-            command_integration_script(args, target, test_dir)
+            command_integration_script(args, target, test_dir, inventory_path)
         else:
-            command_integration_role(args, target, None, test_dir)
+            command_integration_role(args, target, None, test_dir, inventory_path)
 
         targets_executed.add(target_name)
 
 
-def integration_environment(args, target, cmd, test_dir):
+def integration_environment(args, target, test_dir, inventory_path, ansible_config, env_config):
     """
     :type args: IntegrationConfig
     :type target: IntegrationTarget
-    :type cmd: list[str]
     :type test_dir: str
+    :type inventory_path: str
+    :type ansible_config: str | None
+    :type env_config: CloudEnvironmentConfig | None
     :rtype: dict[str, str]
     """
-    env = ansible_environment(args)
+    env = ansible_environment(args, ansible_config=ansible_config)
 
     if args.inject_httptester:
         env.update(dict(
             HTTPTESTER='1',
         ))
 
+    callback_plugins = ['junit'] + (env_config.callback_plugins or [] if env_config else [])
+
     integration = dict(
         JUNIT_OUTPUT_DIR=os.path.abspath('test/results/junit'),
-        ANSIBLE_CALLBACK_WHITELIST='junit',
+        ANSIBLE_CALLBACK_WHITELIST=','.join(sorted(set(callback_plugins))),
         ANSIBLE_TEST_CI=args.metadata.ci_provider,
         OUTPUT_DIR=test_dir,
+        INVENTORY_PATH=os.path.abspath(inventory_path),
     )
 
     if args.debug_strategy:
@@ -1131,104 +1147,125 @@ def integration_environment(args, target, cmd, test_dir):
 
     env.update(integration)
 
-    cloud_environment = get_cloud_environment(args, target)
-
-    if cloud_environment:
-        cloud_environment.configure_environment(env, cmd)
-
     return env
 
 
-def command_integration_script(args, target, test_dir):
+def command_integration_script(args, target, test_dir, inventory_path):
     """
     :type args: IntegrationConfig
     :type target: IntegrationTarget
     :type test_dir: str
+    :type inventory_path: str
     """
     display.info('Running %s integration test script' % target.name)
 
-    cmd = ['./%s' % os.path.basename(target.script_path)]
+    env_config = None
 
-    if args.verbosity:
-        cmd.append('-' + ('v' * args.verbosity))
+    if isinstance(args, PosixIntegrationConfig):
+        cloud_environment = get_cloud_environment(args, target)
 
-    env = integration_environment(args, target, cmd, test_dir)
-    cwd = target.path
+        if cloud_environment:
+            env_config = cloud_environment.get_environment_config()
 
-    intercept_command(args, cmd, target_name=target.name, env=env, cwd=cwd)
+    with integration_test_environment(args, target, inventory_path) as test_env:
+        cmd = ['./%s' % os.path.basename(target.script_path)]
+
+        if args.verbosity:
+            cmd.append('-' + ('v' * args.verbosity))
+
+        env = integration_environment(args, target, test_dir, test_env.inventory_path, test_env.ansible_config, env_config)
+        cwd = os.path.join(test_env.integration_dir, 'targets', target.name)
+
+        if env_config and env_config.env_vars:
+            env.update(env_config.env_vars)
+
+        with integration_test_config_file(args, env_config, test_env.integration_dir) as config_path:
+            if config_path:
+                cmd += ['-e', '@%s' % config_path]
+
+            intercept_command(args, cmd, target_name=target.name, env=env, cwd=cwd)
 
 
-def command_integration_role(args, target, start_at_task, test_dir):
+def command_integration_role(args, target, start_at_task, test_dir, inventory_path):
     """
     :type args: IntegrationConfig
     :type target: IntegrationTarget
     :type start_at_task: str | None
     :type test_dir: str
+    :type inventory_path: str
     """
     display.info('Running %s integration test role' % target.name)
 
-    vars_file = 'integration_config.yml'
+    env_config = None
 
     if isinstance(args, WindowsIntegrationConfig):
-        inventory = 'inventory.winrm'
         hosts = 'windows'
         gather_facts = False
     elif isinstance(args, NetworkIntegrationConfig):
-        inventory = args.inventory or 'inventory.networking'
         hosts = target.name[:target.name.find('_')]
         gather_facts = False
     else:
-        inventory = 'inventory'
         hosts = 'testhost'
         gather_facts = True
 
         cloud_environment = get_cloud_environment(args, target)
 
         if cloud_environment:
-            hosts = cloud_environment.inventory_hosts or hosts
+            env_config = cloud_environment.get_environment_config()
 
-    playbook = '''
-- hosts: %s
-  gather_facts: %s
-  roles:
-    - { role: %s }
-    ''' % (hosts, gather_facts, target.name)
+    with integration_test_environment(args, target, inventory_path) as test_env:
+        play = dict(
+            hosts=hosts,
+            gather_facts=gather_facts,
+            vars_files=[
+                test_env.vars_file,
+            ],
+            roles=[
+                target.name,
+            ],
+        )
 
-    with tempfile.NamedTemporaryFile(dir='test/integration', prefix='%s-' % target.name, suffix='.yml') as pb_fd:
-        pb_fd.write(playbook.encode('utf-8'))
-        pb_fd.flush()
+        if env_config:
+            play.update(dict(
+                vars=env_config.ansible_vars,
+                environment=env_config.env_vars,
+                module_defaults=env_config.module_defaults,
+            ))
 
-        filename = os.path.basename(pb_fd.name)
+        playbook = json.dumps([play], indent=4, sort_keys=True)
 
-        display.info('>>> Playbook: %s\n%s' % (filename, playbook.strip()), verbosity=3)
+        with named_temporary_file(args=args, directory=test_env.integration_dir, prefix='%s-' % target.name, suffix='.yml', content=playbook) as playbook_path:
+            filename = os.path.basename(playbook_path)
 
-        cmd = ['ansible-playbook', filename, '-i', inventory, '-e', '@%s' % vars_file]
+            display.info('>>> Playbook: %s\n%s' % (filename, playbook.strip()), verbosity=3)
 
-        if start_at_task:
-            cmd += ['--start-at-task', start_at_task]
+            cmd = ['ansible-playbook', filename, '-i', test_env.inventory_path]
 
-        if args.tags:
-            cmd += ['--tags', args.tags]
+            if start_at_task:
+                cmd += ['--start-at-task', start_at_task]
 
-        if args.skip_tags:
-            cmd += ['--skip-tags', args.skip_tags]
+            if args.tags:
+                cmd += ['--tags', args.tags]
 
-        if args.diff:
-            cmd += ['--diff']
+            if args.skip_tags:
+                cmd += ['--skip-tags', args.skip_tags]
 
-        if isinstance(args, NetworkIntegrationConfig):
-            if args.testcase:
-                cmd += ['-e', 'testcase=%s' % args.testcase]
+            if args.diff:
+                cmd += ['--diff']
 
-        if args.verbosity:
-            cmd.append('-' + ('v' * args.verbosity))
+            if isinstance(args, NetworkIntegrationConfig):
+                if args.testcase:
+                    cmd += ['-e', 'testcase=%s' % args.testcase]
 
-        env = integration_environment(args, target, cmd, test_dir)
-        cwd = 'test/integration'
+            if args.verbosity:
+                cmd.append('-' + ('v' * args.verbosity))
 
-        env['ANSIBLE_ROLES_PATH'] = os.path.abspath('test/integration/targets')
+            env = integration_environment(args, target, test_dir, test_env.inventory_path, test_env.ansible_config, env_config)
+            cwd = test_env.integration_dir
 
-        intercept_command(args, cmd, target_name=target.name, env=env, cwd=cwd)
+            env['ANSIBLE_ROLES_PATH'] = os.path.abspath(os.path.join(test_env.integration_dir, 'targets'))
+
+            intercept_command(args, cmd, target_name=target.name, env=env, cwd=cwd)
 
 
 def command_units(args):
@@ -1641,7 +1678,7 @@ def get_integration_remote_filter(args, targets):
     if skipped:
         exclude.append(skip)
         display.warning('Excluding tests marked "%s" which are not supported on %s: %s'
-                        % (skip.rstrip('/'), platform, ', '.join(skipped)))
+                        % (skip.rstrip('/'), args.remote.replace('/', ' '), ', '.join(skipped)))
 
     python_version = 2  # remotes are expected to default to python 2
 

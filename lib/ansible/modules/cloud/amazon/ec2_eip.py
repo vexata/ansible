@@ -1,4 +1,6 @@
 #!/usr/bin/python
+# -*- coding: utf-8 -*-
+
 # Copyright: Ansible Project
 # GNU General Public License v3.0+ (see COPYING or https://www.gnu.org/licenses/gpl-3.0.txt)
 
@@ -42,16 +44,19 @@ options:
     description:
       - Allocate an EIP inside a VPC or not. Required if specifying an ENI.
     default: 'no'
+    type: bool
     version_added: "1.4"
   reuse_existing_ip_allowed:
     description:
       - Reuse an EIP that is not associated to a device (when available), instead of allocating a new one.
     default: 'no'
+    type: bool
     version_added: "1.6"
   release_on_disassociation:
     description:
       - whether or not to automatically release the EIP when it is disassociated
     default: 'no'
+    type: bool
     version_added: "2.0"
   private_ip_address:
     description:
@@ -62,6 +67,7 @@ options:
       -  Specify this option to allow an Elastic IP address that is already associated with another
          network interface or instance to be re-associated with the specified instance or interface.
     default: 'no'
+    type: bool
     version_added: "2.5"
 extends_documentation_fragment:
     - aws
@@ -151,12 +157,12 @@ RETURN = '''
 allocation_id:
   description: allocation_id of the elastic ip
   returned: on success
-  type: string
+  type: str
   sample: eipalloc-51aa3a6c
 public_ip:
   description: an elastic ip address
   returned: on success
-  type: string
+  type: str
   sample: 52.88.159.209
 '''
 
@@ -223,7 +229,7 @@ def _find_address_by_ip(ec2, public_ip):
     try:
         return ec2.get_all_addresses([public_ip])[0]
     except boto.exception.EC2ResponseError as e:
-        if "Address '{}' not found.".format(public_ip) not in e.message:
+        if "Address '{0}' not found.".format(public_ip) not in e.message:
             raise
 
 
@@ -381,7 +387,10 @@ def main():
 
     module = AnsibleModule(
         argument_spec=argument_spec,
-        supports_check_mode=True
+        supports_check_mode=True,
+        required_together=[
+            ['device_id', 'private_ip_address'],
+        ],
     )
 
     if not HAS_BOTO:
@@ -399,10 +408,6 @@ def main():
     reuse_existing_ip_allowed = module.params.get('reuse_existing_ip_allowed')
     release_on_disassociation = module.params.get('release_on_disassociation')
     allow_reassociation = module.params.get('allow_reassociation')
-
-    # Parameter checks
-    if private_ip_address is not None and device_id is None:
-        module.fail_json(msg="parameters are required together: ('device_id', 'private_ip_address')")
 
     if instance_id:
         warnings = ["instance_id is no longer used, please use device_id going forward"]

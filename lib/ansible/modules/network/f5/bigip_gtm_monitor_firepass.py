@@ -140,28 +140,31 @@ EXAMPLES = r'''
     name: my_monitor
     ip: 1.1.1.1
     port: 80
-    password: secret
-    server: lb.mydomain.com
     state: present
-    user: admin
+    provider:
+      user: admin
+      password: secret
+      server: lb.mydomain.com
   delegate_to: localhost
 
 - name: Remove FirePass Monitor
   bigip_gtm_monitor_firepass:
     name: my_monitor
     state: absent
-    server: lb.mydomain.com
-    user: admin
-    password: secret
+    provider:
+      user: admin
+      password: secret
+      server: lb.mydomain.com
   delegate_to: localhost
 
 - name: Add FirePass monitor for all addresses, port 514
   bigip_gtm_monitor_firepass:
     name: my_monitor
-    server: lb.mydomain.com
-    user: admin
     port: 514
-    password: secret
+    provider:
+      user: admin
+      password: secret
+      server: lb.mydomain.com
   delegate_to: localhost
 '''
 
@@ -169,17 +172,17 @@ RETURN = r'''
 parent:
   description: New parent template of the monitor.
   returned: changed
-  type: string
+  type: str
   sample: firepass_gtm
 ip:
   description: The new IP of IP/port definition.
   returned: changed
-  type: string
+  type: str
   sample: 10.12.13.14
 port:
   description: The new port the monitor checks the resource on.
   returned: changed
-  type: string
+  type: str
   sample: 8080
 interval:
   description: The new interval in which to run the monitor check.
@@ -204,7 +207,7 @@ probe_timeout:
 cipher_list:
   description: The new value for the cipher list.
   returned: changed
-  type: string
+  type: str
   sample: +3DES:+kEDH
 max_load_average:
   description: The new value for the max load average.

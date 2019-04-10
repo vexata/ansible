@@ -140,17 +140,17 @@ transfer_status:
     description: Whether a file was transferred. "No Transfer" or "Sent".
                  If file_pull is successful, it is set to "Received".
     returned: success
-    type: string
+    type: str
     sample: 'Sent'
 local_file:
     description: The path of the local file.
     returned: success
-    type: string
+    type: str
     sample: '/path/to/local/file'
 remote_file:
     description: The path of the remote file.
     returned: success
-    type: string
+    type: str
     sample: '/path/to/remote/file'
 '''
 
@@ -268,7 +268,7 @@ def transfer_file_to_device(module, dest):
     scp = SCPClient(ssh.get_transport())
     try:
         scp.put(module.params['local_file'], full_remote_path)
-    except:
+    except Exception:
         time.sleep(10)
         temp_size = verify_remote_file_exists(
             module, dest, file_system=module.params['file_system'])

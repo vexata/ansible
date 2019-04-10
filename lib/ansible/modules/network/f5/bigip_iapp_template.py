@@ -73,29 +73,32 @@ EXAMPLES = r'''
 - name: Add the iApp contained in template iapp.tmpl
   bigip_iapp_template:
     content: "{{ lookup('template', 'iapp.tmpl') }}"
-    password: secret
-    server: lb.mydomain.com
     state: present
-    user: admin
+    provider:
+      user: admin
+      password: secret
+      server: lb.mydomain.com
   delegate_to: localhost
 
 - name: Update a template in place
   bigip_iapp_template:
     content: "{{ lookup('template', 'iapp-new.tmpl') }}"
-    password: secret
-    server: lb.mydomain.com
     state: present
-    user: admin
+    provider:
+      user: admin
+      password: secret
+      server: lb.mydomain.com
   delegate_to: localhost
 
 - name: Update a template in place that has existing services created from it.
   bigip_iapp_template:
     content: "{{ lookup('template', 'iapp-new.tmpl') }}"
     force: yes
-    password: secret
-    server: lb.mydomain.com
     state: present
-    user: admin
+    provider:
+      user: admin
+      password: secret
+      server: lb.mydomain.com
   delegate_to: localhost
 '''
 
@@ -148,8 +151,8 @@ class Parameters(AnsibleF5Parameters):
         if self._values['name']:
             return self._values['name']
         if self._values['content']:
-                name = self._get_template_name()
-                return name
+            name = self._get_template_name()
+            return name
         return None
 
     @property

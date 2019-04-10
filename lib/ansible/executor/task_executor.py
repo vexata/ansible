@@ -5,6 +5,7 @@ from __future__ import (absolute_import, division, print_function)
 __metaclass__ = type
 
 import os
+import re
 import pty
 import time
 import json
@@ -17,10 +18,12 @@ from ansible import constants as C
 from ansible.errors import AnsibleError, AnsibleParserError, AnsibleUndefinedVariable, AnsibleConnectionFailure, AnsibleActionFail, AnsibleActionSkip
 from ansible.executor.task_result import TaskResult
 from ansible.module_utils.six import iteritems, string_types, binary_type
+from ansible.module_utils.six.moves import xrange
 from ansible.module_utils._text import to_text, to_native
 from ansible.module_utils.connection import write_to_file_descriptor
 from ansible.playbook.conditional import Conditional
 from ansible.playbook.task import Task
+from ansible.plugins.loader import become_loader
 from ansible.template import Templar
 from ansible.utils.listify import listify_lookup_plugin_terms
 from ansible.utils.unsafe_proxy import UnsafeProxy, wrap_var
@@ -286,6 +289,7 @@ class TaskExecutor:
         index_var = None
         label = None
         loop_pause = 0
+        extended = False
         templar = Templar(loader=self._loader, shared_loader_obj=self._shared_loader_obj, variables=self._job_vars)
 
         # FIXME: move this to the object itself to allow post_validate to take care of templating (loop_control.post_validate)
@@ -293,6 +297,7 @@ class TaskExecutor:
             loop_var = templar.template(self._task.loop_control.loop_var)
             index_var = templar.template(self._task.loop_control.index_var)
             loop_pause = templar.template(self._task.loop_control.pause)
+            extended = templar.template(self._task.loop_control.extended)
 
             # This may be 'None',so it is tempalted below after we ensure a value and an item is assigned
             label = self._task.loop_control.label
@@ -312,10 +317,29 @@ class TaskExecutor:
             items = self._squash_items(items, loop_var, task_vars)
 
         no_log = False
+        items_len = len(items)
         for item_index, item in enumerate(items):
             task_vars[loop_var] = item
             if index_var:
                 task_vars[index_var] = item_index
+
+            if extended:
+                task_vars['ansible_loop'] = {
+                    'allitems': items,
+                    'index': item_index + 1,
+                    'index0': item_index,
+                    'first': item_index == 0,
+                    'last': item_index + 1 == items_len,
+                    'length': items_len,
+                    'revindex': items_len - item_index,
+                    'revindex0': items_len - item_index - 1,
+                }
+                try:
+                    task_vars['ansible_loop']['nextitem'] = items[item_index + 1]
+                except IndexError:
+                    pass
+                if item_index - 1 >= 0:
+                    task_vars['ansible_loop']['previtem'] = items[item_index - 1]
 
             # Update template vars to reflect current loop iteration
             templar.set_available_variables(task_vars)
@@ -354,6 +378,9 @@ class TaskExecutor:
             res[loop_var] = item
             if index_var:
                 res[index_var] = item_index
+            if extended:
+                res['ansible_loop'] = task_vars['ansible_loop']
+
             res['_ansible_item_result'] = True
             res['_ansible_ignore_errors'] = task_fields.get('ignore_errors')
 
@@ -425,10 +452,18 @@ class TaskExecutor:
                         # name/pkg or the name/pkg field doesn't have any variables
                         # and thus the items can't be squashed
                         if template_no_item != template_with_item:
+                            if self._task.loop_with and self._task.loop_with not in ('items', 'list'):
+                                value_text = "\"{{ query('%s', %r) }}\"" % (self._task.loop_with, self._task.loop)
+                            else:
+                                value_text = '%r' % self._task.loop
+                            # Without knowing the data structure well, it's easiest to strip python2 unicode
+                            # literals after stringifying
+                            value_text = re.sub(r"\bu'", "'", value_text)
+
                             display.deprecated(
                                 'Invoking "%s" only once while using a loop via squash_actions is deprecated. '
-                                'Instead of using a loop to supply multiple items and specifying `%s: %s`, '
-                                'please use `%s: %r` and remove the loop' % (self._task.action, found, name, found, self._task.loop),
+                                'Instead of using a loop to supply multiple items and specifying `%s: "%s"`, '
+                                'please use `%s: %s` and remove the loop' % (self._task.action, found, name, found, value_text),
                                 version='2.11'
                             )
                             for item in items:
@@ -556,7 +591,6 @@ class TaskExecutor:
             self._connection._play_context = self._play_context
 
         self._set_connection_options(variables, templar)
-        self._set_shell_options(variables, templar)
 
         # get handler
         self._handler = self._get_action_handler(connection=self._connection, templar=templar)
@@ -605,7 +639,7 @@ class TaskExecutor:
 
         display.debug("starting attempt loop")
         result = None
-        for attempt in range(1, retries + 1):
+        for attempt in xrange(1, retries + 1):
             display.debug("running the handler")
             try:
                 result = self._handler.run(task_vars=variables)
@@ -815,6 +849,13 @@ class TaskExecutor:
         else:
             return async_result
 
+    def _get_become(self, name):
+        become = become_loader.get(name)
+        if not become:
+            raise AnsibleError("Invalid become method specified, could not find matching plugin: '%s'. "
+                               "Use `ansible-doc -t become -l` to list available plugins." % name)
+        return become
+
     def _get_connection(self, variables, templar):
         '''
         Reads the connection property for the host, and returns the
@@ -835,8 +876,8 @@ class TaskExecutor:
                     if isinstance(i, string_types) and i.startswith("ansible_") and i.endswith("_interpreter"):
                         variables[i] = delegated_vars[i]
 
+        # load connection
         conn_type = self._play_context.connection
-
         connection = self._shared_loader_obj.connection_loader.get(
             conn_type,
             self._play_context,
@@ -848,8 +889,30 @@ class TaskExecutor:
         if not connection:
             raise AnsibleError("the connection plugin '%s' was not found" % conn_type)
 
+        # load become plugin if needed
+        become_plugin = None
+        if self._play_context.become:
+            become_plugin = self._get_become(self._play_context.become_method)
+
+        if getattr(become_plugin, 'require_tty', False) and not getattr(connection, 'has_tty', False):
+            raise AnsibleError(
+                "The '%s' connection does not provide a tty which is requied for the selected "
+                "become plugin: %s." % (conn_type, become_plugin.name)
+            )
+
+        try:
+            connection.set_become_plugin(become_plugin)
+        except AttributeError:
+            # Connection plugin does not support set_become_plugin
+            pass
+
+        # Backwards compat for connection plugins that don't support become plugins
+        # Just do this unconditionally for now, we could move it inside of the
+        # AttributeError above later
+        self._play_context.set_become_plugin(become_plugin)
+
         # FIXME: remove once all plugins pull all data from self._options
-        self._play_context.set_options_from_plugin(connection)
+        self._play_context.set_attributes_from_plugin(connection)
 
         if any(((connection.supports_persistence and C.USE_PERSISTENT_CONNECTIONS), connection.force_persistence)):
             self._play_context.timeout = connection.get_option('persistent_command_timeout')
@@ -867,9 +930,9 @@ class TaskExecutor:
         final_vars = combine_vars(variables, variables.get('ansible_delegated_vars', dict()).get(self._task.delegate_to, dict()))
 
         option_vars = C.config.get_plugin_vars('connection', connection._load_name)
-        for plugin in connection._sub_plugins:
-            if plugin['type'] != 'external':
-                option_vars.extend(C.config.get_plugin_vars(plugin['type'], plugin['name']))
+        plugin = connection._sub_plugin
+        if plugin['type'] != 'external':
+            option_vars.extend(C.config.get_plugin_vars(plugin['type'], plugin['name']))
 
         options = {}
         for k in option_vars:
@@ -878,13 +941,30 @@ class TaskExecutor:
 
         return options
 
+    def _set_plugin_options(self, plugin_type, variables, templar, task_keys):
+        try:
+            plugin = getattr(self._connection, '_%s' % plugin_type)
+        except AttributeError:
+            # Some plugins are assigned to private attrs, ``become`` is not
+            plugin = getattr(self._connection, plugin_type)
+        option_vars = C.config.get_plugin_vars(plugin_type, plugin._load_name)
+        options = {}
+        for k in option_vars:
+            if k in variables:
+                options[k] = templar.template(variables[k])
+        # TODO move to task method?
+        plugin.set_options(task_keys=task_keys, var_options=options)
+
     def _set_connection_options(self, variables, templar):
 
         # Keep the pre-delegate values for these keys
         PRESERVE_ORIG = ('inventory_hostname',)
 
         # create copy with delegation built in
-        final_vars = combine_vars(variables, variables.get('ansible_delegated_vars', dict()).get(self._task.delegate_to, dict()))
+        final_vars = combine_vars(
+            variables,
+            variables.get('ansible_delegated_vars', {}).get(self._task.delegate_to, {})
+        )
 
         # grab list of usable vars for this plugin
         option_vars = C.config.get_plugin_vars('connection', self._connection._load_name)
@@ -903,17 +983,25 @@ class TaskExecutor:
                 if k.startswith('ansible_%s_' % self._connection._load_name) and k not in options:
                     options['_extras'][k] = templar.template(final_vars[k])
 
-        # set options with 'templated vars' specific to this plugin
-        self._connection.set_options(var_options=options)
-        self._set_shell_options(final_vars, templar)
+        task_keys = self._task.dump_attrs()
 
-    def _set_shell_options(self, variables, templar):
-        option_vars = C.config.get_plugin_vars('shell', self._connection._shell._load_name)
-        options = {}
-        for k in option_vars:
-            if k in variables:
-                options[k] = templar.template(variables[k])
-        self._connection._shell.set_options(var_options=options)
+        # set options with 'templated vars' specific to this plugin and dependant ones
+        self._connection.set_options(task_keys=task_keys, var_options=options)
+        self._set_plugin_options('shell', final_vars, templar, task_keys)
+
+        if self._connection.become is not None:
+            # FIXME: find alternate route to provide passwords,
+            # keep out of play objects to avoid accidental disclosure
+            task_keys['become_pass'] = self._play_context.become_pass
+            self._set_plugin_options('become', final_vars, templar, task_keys)
+
+            # FOR BACKWARDS COMPAT:
+            for option in ('become_user', 'become_flags', 'become_exe'):
+                try:
+                    setattr(self._play_context, option, self._connection.become.get_option(option))
+                except KeyError:
+                    pass  # some plugins don't support all base flags
+            self._play_context.prompt = self._connection.become.prompt
 
     def _get_action_handler(self, connection, templar):
         '''
@@ -994,8 +1082,16 @@ class TaskExecutor:
                 result = {'error': to_text(stderr, errors='surrogate_then_replace')}
 
         if 'messages' in result:
-            for msg in result.get('messages'):
-                display.vvvv('%s' % msg, host=self._play_context.remote_addr)
+            for level, message in result['messages']:
+                if level == 'log':
+                    display.display(message, log_only=True)
+                elif level in ('debug', 'v', 'vv', 'vvv', 'vvvv', 'vvvvv', 'vvvvvv'):
+                    getattr(display, level)(message, host=self._play_context.remote_addr)
+                else:
+                    if hasattr(display, level):
+                        getattr(display, level)(message)
+                    else:
+                        display.vvvv(message, host=self._play_context.remote_addr)
 
         if 'error' in result:
             if self._play_context.verbosity > 2:

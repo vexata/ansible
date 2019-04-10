@@ -32,7 +32,11 @@ options:
   os:
     description:
       - The operating system.
-      - Required if the server does not yet exist.
+      - Required if the server does not yet exist and is not restoring from a snapshot.
+  snapshot:
+    version_added: "2.8"
+    description:
+      - Name of snapshot to restore server from.
   firewall_group:
     description:
       - The firewall group to assign this server to.
@@ -99,6 +103,9 @@ EXAMPLES = '''
     name: "{{ vultr_server_name }}"
     os: CentOS 7 x64
     plan: 1024 MB RAM,25 GB SSD,1.00 TB BW
+    ssh_keys:
+      - my_key
+      - your_key
     region: Amsterdam
     state: present
 
@@ -108,6 +115,7 @@ EXAMPLES = '''
     name: "{{ vultr_server_name }}"
     os: CentOS 7 x64
     plan: 1024 MB RAM,25 GB SSD,1.00 TB BW
+    ssh_key: my_key
     region: Amsterdam
     state: started
 
@@ -149,7 +157,7 @@ vultr_api:
     api_account:
       description: Account used in the ini file to select the key
       returned: success
-      type: string
+      type: str
       sample: default
     api_timeout:
       description: Timeout used for the API requests
@@ -164,7 +172,7 @@ vultr_api:
     api_endpoint:
       description: Endpoint used for the API requests
       returned: success
-      type: string
+      type: str
       sample: "https://api.vultr.com"
 vultr_server:
   description: Response from Vultr API with a few additions/modification
@@ -174,17 +182,17 @@ vultr_server:
     id:
       description: ID of the server
       returned: success
-      type: string
+      type: str
       sample: 10194376
     name:
       description: Name (label) of the server
       returned: success
-      type: string
+      type: str
       sample: "ansible-test-vm"
     plan:
       description: Plan used for the server
       returned: success
-      type: string
+      type: str
       sample: "1024 MB RAM,25 GB SSD,1.00 TB BW"
     allowed_bandwidth_gb:
       description: Allowed bandwidth to use in GB
@@ -209,57 +217,57 @@ vultr_server:
     date_created:
       description: Date when the server was created
       returned: success
-      type: string
+      type: str
       sample: "2017-08-26 12:47:48"
     default_password:
       description: Password to login as root into the server
       returned: success
-      type: string
+      type: str
       sample: "!p3EWYJm$qDWYaFr"
     disk:
       description: Information about the disk
       returned: success
-      type: string
+      type: str
       sample: "Virtual 25 GB"
     v4_gateway:
       description: IPv4 gateway
       returned: success
-      type: string
+      type: str
       sample: "45.32.232.1"
     internal_ip:
       description: Internal IP
       returned: success
-      type: string
+      type: str
       sample: ""
     kvm_url:
       description: URL to the VNC
       returned: success
-      type: string
+      type: str
       sample: "https://my.vultr.com/subs/vps/novnc/api.php?data=xyz"
     region:
       description: Region the server was deployed into
       returned: success
-      type: string
+      type: str
       sample: "Amsterdam"
     v4_main_ip:
       description: Main IPv4
       returned: success
-      type: string
+      type: str
       sample: "45.32.233.154"
     v4_netmask:
       description: Netmask IPv4
       returned: success
-      type: string
+      type: str
       sample: "255.255.254.0"
     os:
       description: Operating system used for the server
       returned: success
-      type: string
+      type: str
       sample: "CentOS 6 x64"
     firewall_group:
       description: Firewall group the server is assinged to
       returned: success and available
-      type: string
+      type: str
       sample: "CentOS 6 x64"
     pending_charges:
       description: Pending charges
@@ -269,42 +277,42 @@ vultr_server:
     power_status:
       description: Power status of the server
       returned: success
-      type: string
+      type: str
       sample: "running"
     ram:
       description: Information about the RAM size
       returned: success
-      type: string
+      type: str
       sample: "1024 MB"
     server_state:
       description: State about the server
       returned: success
-      type: string
+      type: str
       sample: "ok"
     status:
       description: Status about the deployment of the server
       returned: success
-      type: string
+      type: str
       sample: "active"
     tag:
       description: TBD
       returned: success
-      type: string
+      type: str
       sample: ""
     v6_main_ip:
       description: Main IPv6
       returned: success
-      type: string
+      type: str
       sample: ""
     v6_network:
       description: Network IPv6
       returned: success
-      type: string
+      type: str
       sample: ""
     v6_network_size:
       description:  Network size IPv6
       returned: success
-      type: string
+      type: str
       sample: ""
     v6_networks:
       description: Networks IPv6
@@ -375,20 +383,42 @@ class AnsibleVultrServer(Vultr):
         )
 
     def get_os(self):
+        if self.module.params.get('snapshot'):
+            os_name = 'Snapshot'
+        else:
+            os_name = self.module.params.get('os')
+
         return self.query_resource_by_key(
             key='name',
-            value=self.module.params.get('os'),
+            value=os_name,
             resource='os',
             use_cache=True
         )
 
-    def get_ssh_key(self):
+    def get_snapshot(self):
         return self.query_resource_by_key(
-            key='name',
-            value=self.module.params.get('ssh_key'),
-            resource='sshkey',
+            key='description',
+            value=self.module.params.get('snapshot'),
+            resource='snapshot',
             use_cache=True
         )
+
+    def get_ssh_keys(self):
+        ssh_key_names = self.module.params.get('ssh_keys')
+        if not ssh_key_names:
+            return []
+
+        ssh_keys = []
+        for ssh_key_name in ssh_key_names:
+            ssh_key = self.query_resource_by_key(
+                key='name',
+                value=ssh_key_name,
+                resource='sshkey',
+                use_cache=True
+            )
+            if ssh_key:
+                ssh_keys.append(ssh_key)
+        return ssh_keys
 
     def get_region(self):
         return self.query_resource_by_key(
@@ -477,6 +507,11 @@ class AnsibleVultrServer(Vultr):
             'plan',
             'region',
         ]
+
+        snapshot_restore = self.module.params.get('snapshot') is not None
+        if snapshot_restore:
+            required_params.remove('os')
+
         self.module.fail_on_missing_params(required_params=required_params)
 
         self.result['changed'] = True
@@ -486,9 +521,10 @@ class AnsibleVultrServer(Vultr):
                 'VPSPLANID': self.get_plan().get('VPSPLANID'),
                 'FIREWALLGROUPID': self.get_firewall_group().get('FIREWALLGROUPID'),
                 'OSID': self.get_os().get('OSID'),
+                'SNAPSHOTID': self.get_snapshot().get('SNAPSHOTID'),
                 'label': self.module.params.get('name'),
                 'hostname': self.module.params.get('hostname'),
-                'SSHKEYID': self.get_ssh_key().get('SSHKEYID'),
+                'SSHKEYID': ','.join([ssh_key['SSHKEYID'] for ssh_key in self.get_ssh_keys()]),
                 'enable_ipv6': self.get_yes_or_no('ipv6_enabled'),
                 'enable_private_network': self.get_yes_or_no('private_network_enabled'),
                 'auto_backups': self.get_yes_or_no('auto_backup_enabled'),
@@ -504,7 +540,7 @@ class AnsibleVultrServer(Vultr):
                 data=data
             )
             server = self._wait_for_state(key='status', state='active')
-            server = self._wait_for_state(state='running')
+            server = self._wait_for_state(state='running', timeout=3600 if snapshot_restore else 60)
         return server
 
     def _update_auto_backups_setting(self, server, start_server):
@@ -627,6 +663,10 @@ class AnsibleVultrServer(Vultr):
         return server, warned
 
     def _update_server(self, server=None, start_server=True):
+        # Wait for server to unlock if restoring
+        if server.get('os').strip() == 'Snapshot':
+            server = self._wait_for_state(key='server_status', state='ok', timeout=3600)
+
         # Update auto backups settings, stops server
         server = self._update_auto_backups_setting(server=server, start_server=start_server)
 
@@ -757,10 +797,10 @@ class AnsibleVultrServer(Vultr):
                 server = self._wait_for_state(state='running')
         return server
 
-    def _wait_for_state(self, key='power_status', state=None):
+    def _wait_for_state(self, key='power_status', state=None, timeout=60):
         time.sleep(1)
         server = self.get_server(refresh=True)
-        for s in range(0, 60):
+        for s in range(0, timeout):
             # Check for Truely if wanted state is None
             if state is None and server.get(key):
                 break
@@ -827,6 +867,7 @@ def main():
         name=dict(required=True, aliases=['label']),
         hostname=dict(),
         os=dict(),
+        snapshot=dict(),
         plan=dict(),
         force=dict(type='bool', default=False),
         notify_activate=dict(type='bool', default=False),

@@ -123,30 +123,33 @@ EXAMPLES = r'''
   bigip_monitor_http:
     state: present
     ip: 10.10.10.10
-    server: lb.mydomain.com
-    user: admin
-    password: secret
     name: my_http_monitor
+    provider:
+      server: lb.mydomain.com
+      user: admin
+      password: secret
   delegate_to: localhost
 
 - name: Remove HTTP Monitor
   bigip_monitor_http:
     state: absent
-    server: lb.mydomain.com
-    user: admin
-    password: secret
     name: my_http_monitor
+    provider:
+      server: lb.mydomain.com
+      user: admin
+      password: secret
   delegate_to: localhost
 
 - name: Include a username and password in the HTTP monitor
   bigip_monitor_http:
     state: absent
-    server: lb.mydomain.com
-    user: admin
-    password: secret
     name: my_http_monitor
     target_username: monitor_user
     target_password: monitor_pass
+    provider:
+      server: lb.mydomain.com
+      user: admin
+      password: secret
   delegate_to: localhost
 '''
 
@@ -154,7 +157,7 @@ RETURN = r'''
 parent:
   description: New parent template of the monitor.
   returned: changed
-  type: string
+  type: str
   sample: http
 description:
   description: The description of the monitor.
@@ -164,7 +167,7 @@ description:
 ip:
   description: The new IP of IP/port definition.
   returned: changed
-  type: string
+  type: str
   sample: 10.12.13.14
 interval:
   description: The new interval in which to run the monitor check.
@@ -469,6 +472,10 @@ class Difference(object):
     def description(self):
         return cmp_str_with_none(self.want.description, self.have.description)
 
+    @property
+    def receive_disable(self):
+        return cmp_str_with_none(self.want.receive_disable, self.have.receive_disable)
+
 
 class ModuleManager(object):
     def __init__(self, *args, **kwargs):
@@ -696,7 +703,7 @@ class ArgumentSpec(object):
             description=dict(),
             send=dict(),
             receive=dict(),
-            receive_disable=dict(required=False),
+            receive_disable=dict(),
             ip=dict(),
             port=dict(),
             interval=dict(type='int'),

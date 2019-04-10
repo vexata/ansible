@@ -737,7 +737,7 @@ class VaultLib:
                     file_slug = ''
                     if filename:
                         file_slug = ' of "%s"' % filename
-                    display.vvvvv('Decrypt%s successful with secret=%s and vault_id=%s' % (file_slug, vault_secret, vault_secret_id))
+                    display.vvvvv(u'Decrypt%s successful with secret=%s and vault_id=%s' % (to_text(file_slug), vault_secret, vault_secret_id))
                     break
             except AnsibleVaultFormatError as exc:
                 msg = "There was a vault format error"
@@ -1030,7 +1030,10 @@ class VaultEditor:
                 with open(filename, "rb") as fh:
                     data = fh.read()
         except Exception as e:
-            raise AnsibleError(to_native(e))
+            msg = to_native(e)
+            if not msg:
+                msg = repr(e)
+            raise AnsibleError('Unable to read source file (%s): %s' % (to_native(filename), msg))
 
         return data
 

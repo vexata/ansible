@@ -29,31 +29,34 @@ options:
     description:
       - enable auto-removal of the container on daemon side when the container's process exits
     type: bool
-    default: 'no'
+    default: no
     version_added: "2.4"
   blkio_weight:
     description:
       - Block IO (relative weight), between 10 and 1000.
+    type: int
   capabilities:
     description:
       - List of capabilities to add to the container.
+    type: list
   cap_drop:
     description:
       - List of capabilities to drop from the container.
+    type: list
     version_added: "2.7"
   cleanup:
     description:
       - Use with I(detach=false) to remove the container after successful execution.
     type: bool
-    default: 'no'
+    default: no
     version_added: "2.2"
   command:
     description:
       - Command to execute when the container starts.
         A command may be either a string or a list.
-        Prior to version 2.4, strings were split on commas.
+      - Prior to version 2.4, strings were split on commas.
+    type: raw
   comparisons:
-    type: dict
     description:
       - Allows to specify how properties of existing containers are compared with
         module options to decide whether the container should be recreated / updated
@@ -72,50 +75,57 @@ options:
       - The wildcard option C(*) can be used to set one of the default values C(strict)
         or C(ignore) to I(all) comparisons.
       - See the examples for details.
+    type: dict
     version_added: "2.8"
   cpu_period:
     description:
       - Limit CPU CFS (Completely Fair Scheduler) period
+    type: int
   cpu_quota:
     description:
       - Limit CPU CFS (Completely Fair Scheduler) quota
+    type: int
   cpuset_cpus:
     description:
       - CPUs in which to allow execution C(1,3) or C(1-3).
+    type: str
   cpuset_mems:
     description:
       - Memory nodes (MEMs) in which to allow execution C(0-3) or C(0,1)
+    type: str
   cpu_shares:
     description:
       - CPU shares (relative weight).
+    type: int
   detach:
     description:
       - Enable detached mode to leave the container running in background.
         If disabled, the task will reflect the status of the container run (failed if the command failed).
     type: bool
-    default: true
+    default: yes
   devices:
     description:
       - "List of host device bindings to add to the container. Each binding is a mapping expressed
         in the format: <path_on_host>:<path_in_container>:<cgroup_permissions>"
+    type: list
   device_read_bps:
     description:
       - "List of device path and read rate (bytes per second) from device."
     type: list
     suboptions:
       path:
-        type: str
-        required: true
         description:
         - Device path in the container.
-      rate:
         type: str
-        required: true
+        required: yes
+      rate:
         description:
         - "Device read limit. Format: <number>[<unit>]"
         - "Number is a positive integer. Unit can be one of C(B) (byte), C(K) (kibibyte, 1024B), C(M) (mebibyte), C(G) (gibibyte),
           C(T) (tebibyte), or C(P) (pebibyte)"
         - "Omitting the unit defaults to bytes."
+        type: str
+        required: yes
     version_added: "2.8"
   device_write_bps:
     description:
@@ -123,18 +133,18 @@ options:
     type: list
     suboptions:
       path:
-        type: str
-        required: true
         description:
         - Device path in the container.
-      rate:
         type: str
-        required: true
+        required: yes
+      rate:
         description:
         - "Device read limit. Format: <number>[<unit>]"
         - "Number is a positive integer. Unit can be one of C(B) (byte), C(K) (kibibyte, 1024B), C(M) (mebibyte), C(G) (gibibyte),
           C(T) (tebibyte), or C(P) (pebibyte)"
         - "Omitting the unit defaults to bytes."
+        type: str
+        required: yes
     version_added: "2.8"
   device_read_iops:
     description:
@@ -142,16 +152,16 @@ options:
     type: list
     suboptions:
       path:
-        type: str
-        required: true
         description:
         - Device path in the container.
+        type: str
+        required: yes
       rate:
-        type: int
-        required: true
         description:
         - "Device read limit."
         - "Must be a positive integer."
+        type: int
+        required: yes
     version_added: "2.8"
   device_write_iops:
     description:
@@ -159,51 +169,61 @@ options:
     type: list
     suboptions:
       path:
-        type: str
-        required: true
         description:
         - Device path in the container.
+        type: str
+        required: yes
       rate:
-        type: int
-        required: true
         description:
         - "Device read limit."
         - "Must be a positive integer."
+        type: int
+        required: yes
     version_added: "2.8"
   dns_opts:
     description:
       - list of DNS options
+    type: list
   dns_servers:
     description:
       - List of custom DNS servers.
+    type: list
   dns_search_domains:
     description:
       - List of custom DNS search domains.
+    type: list
   domainname:
     description:
       - Container domainname.
+    type: str
     version_added: "2.5"
   env:
     description:
       - Dictionary of key,value pairs.
+      - Values which might be parsed as numbers, booleans or other types by the YAML parser must be quoted (e.g. C("true")) in order to avoid data loss.
+    type: dict
   env_file:
-    version_added: "2.2"
     description:
       - Path to a file, present on the target, containing environment variables I(FOO=BAR).
       - If variable also present in C(env), then C(env) value will override.
+    type: path
+    version_added: "2.2"
   entrypoint:
     description:
       - Command that overwrites the default ENTRYPOINT of the image.
+    type: list
   etc_hosts:
     description:
       - Dict of host-to-IP mappings, where each host name is a key in the dictionary.
         Each host name will be added to the container's /etc/hosts file.
+    type: dict
   exposed_ports:
     description:
       - List of additional container ports which informs Docker that the container
         listens on the specified network ports at runtime.
         If the port is already exposed using EXPOSE in a Dockerfile, it does not
         need to be exposed again.
+    type: list
     aliases:
       - exposed
       - expose
@@ -211,26 +231,27 @@ options:
     description:
       - Use the kill command when stopping a running container.
     type: bool
-    default: 'no'
+    default: no
     aliases:
       - forcekill
   groups:
     description:
       - List of additional group names and/or IDs that the container process will run as.
+    type: list
   healthcheck:
-    version_added: "2.8"
-    type: dict
     description:
       - 'Configure a check that is run to determine whether or not containers for this service are "healthy".
         See the docs for the L(HEALTHCHECK Dockerfile instruction,https://docs.docker.com/engine/reference/builder/#healthcheck)
         for details on how healthchecks work.'
       - 'I(interval), I(timeout) and I(start_period) are specified as durations. They accept duration as a string in a format
         that look like: C(5h34m56s), C(1m30s) etc. The supported units are C(us), C(ms), C(s), C(m) and C(h)'
+    type: dict
     suboptions:
       test:
         description:
           - Command to run to check health.
           - Must be either a string or a list. If it is a list, the first item must be one of C(NONE), C(CMD) or C(CMD-SHELL).
+        type: raw
       interval:
         description:
           - 'Time between running the check. (default: 30s)'
@@ -247,9 +268,11 @@ options:
         description:
           - 'Start period for the container to initialize before starting health-retries countdown. (default: 0s)'
         type: str
+    version_added: "2.8"
   hostname:
     description:
       - Container hostname.
+    type: str
   ignore_image:
     description:
       - When C(state) is I(present) or I(started) the module compares the configuration of an existing
@@ -258,7 +281,7 @@ options:
         recreated. Stop this behavior by setting C(ignore_image) to I(True).
       - I(Warning:) This option is ignored if C(image) or C(*) is used for the C(comparisons) option.
     type: bool
-    default: 'no'
+    default: no
     version_added: "2.2"
   image:
     description:
@@ -266,63 +289,72 @@ options:
         will be pulled from the registry. If no tag is included, C(latest) will be used.
       - Can also be an image ID. If this is the case, the image is assumed to be available locally.
         The C(pull) option is ignored for this case.
+    type: str
   init:
     description:
       - Run an init inside the container that forwards signals and reaps processes.
         This option requires Docker API 1.25+.
     type: bool
-    default: 'no'
+    default: no
     version_added: "2.6"
   interactive:
     description:
       - Keep stdin open after a container is launched, even if not attached.
     type: bool
-    default: 'no'
+    default: no
   ipc_mode:
     description:
       - Set the IPC mode for the container. Can be one of 'container:<name|id>' to reuse another
         container's IPC namespace or 'host' to use the host's IPC namespace within the container.
+    type: str
   keep_volumes:
     description:
       - Retain volumes associated with a removed container.
     type: bool
-    default: 'yes'
+    default: yes
   kill_signal:
     description:
       - Override default signal used to kill a running container.
+    type: str
   kernel_memory:
     description:
       - "Kernel memory limit (format: C(<number>[<unit>])). Number is a positive integer.
         Unit can be C(B) (byte), C(K) (kibibyte, 1024B), C(M) (mebibyte), C(G) (gibibyte),
         C(T) (tebibyte), or C(P) (pebibyte). Minimum is C(4M)."
       - Omitting the unit defaults to bytes.
+    type: str
   labels:
-     description:
-       - Dictionary of key value pairs.
+    description:
+      - Dictionary of key value pairs.
+    type: dict
   links:
     description:
       - List of name aliases for linked containers in the format C(container_name:alias).
       - Setting this will force container to be restarted.
+    type: list
   log_driver:
     description:
       - Specify the logging driver. Docker uses I(json-file) by default.
       - See L(here,https://docs.docker.com/config/containers/logging/configure/) for possible choices.
-    required: false
+    type: str
   log_options:
     description:
       - Dictionary of options specific to the chosen log_driver. See https://docs.docker.com/engine/admin/logging/overview/
         for details.
+    type: dict
     aliases:
       - log_opt
   mac_address:
     description:
       - Container MAC address (e.g. 92:d0:c6:0a:29:33)
+    type: str
   memory:
     description:
       - "Memory limit (format: C(<number>[<unit>])). Number is a positive integer.
         Unit can be C(B) (byte), C(K) (kibibyte, 1024B), C(M) (mebibyte), C(G) (gibibyte),
         C(T) (tebibyte), or C(P) (pebibyte)."
       - Omitting the unit defaults to bytes.
+    type: str
     default: '0'
   memory_reservation:
     description:
@@ -330,61 +362,67 @@ options:
         Unit can be C(B) (byte), C(K) (kibibyte, 1024B), C(M) (mebibyte), C(G) (gibibyte),
         C(T) (tebibyte), or C(P) (pebibyte)."
       - Omitting the unit defaults to bytes.
+    type: str
   memory_swap:
     description:
       - "Total memory limit (memory + swap, format: C(<number>[<unit>])).
         Number is a positive integer. Unit can be C(B) (byte), C(K) (kibibyte, 1024B),
         C(M) (mebibyte), C(G) (gibibyte), C(T) (tebibyte), or C(P) (pebibyte)."
       - Omitting the unit defaults to bytes.
+    type: str
   memory_swappiness:
     description:
         - Tune a container's memory swappiness behavior. Accepts an integer between 0 and 100.
         - If not set, the value will be remain the same if container exists and will be inherited from the host machine if it is (re-)created.
+    type: int
   name:
     description:
       - Assign a name to a new container or match an existing container.
       - When identifying an existing container name may be a name or a long or short container ID.
-    required: true
+    type: str
+    required: yes
   network_mode:
     description:
       - Connect the container to a network. Choices are "bridge", "host", "none" or "container:<name|id>"
+    type: str
   userns_mode:
-     description:
-       - User namespace to use
-     version_added: "2.5"
+    description:
+      - Set the user namespace mode for the container. Currently, the only valid value is C(host).
+    type: str
+    version_added: "2.5"
   networks:
-     description:
-       - List of networks the container belongs to.
-       - For examples of the data structure and usage see EXAMPLES below.
-       - To remove a container from one or more networks, use the C(purge_networks) option.
-       - Note that as opposed to C(docker run ...), M(docker_container) does not remove the default
-         network if C(networks) is specified. You need to explicity use C(purge_networks) to enforce
-         the removal of the default network (and all other networks not explicitly mentioned in C(networks)).
-     version_added: "2.2"
-     type: list
-     suboptions:
-        name:
-           type: str
-           required: true
-           description:
-             - The network's name.
-        ipv4_address:
-           type: str
-           description:
-             - The container's IPv4 address in this network.
-        ipv6_address:
-           type: str
-           description:
-             - The container's IPv6 address in this network.
-        links:
-           type: list
-           description:
-             - A list of containers to link to.
-        aliases:
-           type: list
-           description:
-             - List of aliases for this container in this network. These names
-               can be used in the network to reach this container.
+    description:
+      - List of networks the container belongs to.
+      - For examples of the data structure and usage see EXAMPLES below.
+      - To remove a container from one or more networks, use the C(purge_networks) option.
+      - Note that as opposed to C(docker run ...), M(docker_container) does not remove the default
+        network if C(networks) is specified. You need to explicity use C(purge_networks) to enforce
+        the removal of the default network (and all other networks not explicitly mentioned in C(networks)).
+    type: list
+    suboptions:
+      name:
+        description:
+          - The network's name.
+        type: str
+        required: yes
+      ipv4_address:
+        description:
+          - The container's IPv4 address in this network.
+        type: str
+      ipv6_address:
+        description:
+          - The container's IPv6 address in this network.
+        type: str
+      links:
+        description:
+          - A list of containers to link to.
+        type: list
+      aliases:
+        description:
+          - List of aliases for this container in this network. These names
+            can be used in the network to reach this container.
+        type: list
+    version_added: "2.2"
   oom_killer:
     description:
       - Whether or not to disable OOM Killer for the container.
@@ -392,27 +430,35 @@ options:
   oom_score_adj:
     description:
       - An integer value containing the score given to the container in order to tune OOM killer preferences.
+    type: int
     version_added: "2.2"
   output_logs:
     description:
       - If set to true, output of the container command will be printed (only effective when log_driver is set to json-file or journald.
     type: bool
-    default: 'no'
+    default: no
     version_added: "2.7"
   paused:
     description:
       - Use with the started state to pause running processes inside the container.
     type: bool
-    default: 'no'
+    default: no
   pid_mode:
     description:
       - Set the PID namespace mode for the container.
       - Note that docker-py < 2.0 only supports 'host'. Newer versions allow all values supported by the docker daemon.
+    type: str
+  pids_limit:
+    description:
+      - Set PIDs limit for the container. It accepts an integer value.
+      - Set -1 for unlimited PIDs.
+    type: int
+    version_added: "2.8"
   privileged:
     description:
       - Give extended privileges to the container.
     type: bool
-    default: 'no'
+    default: no
   published_ports:
     description:
       - List of ports to publish from the container to the host.
@@ -432,6 +478,7 @@ options:
         will be bound to the host IP pointed to by com.docker.network.bridge.host_binding_ipv4.
         Note that the first bridge network with a com.docker.network.bridge.host_binding_ipv4
         value encountered in the list of C(networks) is the one that will be used.
+    type: list
     aliases:
       - ports
   pull:
@@ -441,32 +488,33 @@ options:
        - I(Note) that images are only pulled when specified by name. If the image is specified
          as a image ID (hash), it cannot be pulled.
     type: bool
-    default: 'no'
+    default: no
   purge_networks:
     description:
        - Remove the container from ALL networks not included in C(networks) parameter.
        - Any default networks such as I(bridge), if not found in C(networks), will be removed as well.
     type: bool
-    default: 'no'
+    default: no
     version_added: "2.2"
   read_only:
     description:
       - Mount the container's root file system as read-only.
     type: bool
-    default: 'no'
+    default: no
   recreate:
     description:
       - Use with present and started states to force the re-creation of an existing container.
     type: bool
-    default: 'no'
+    default: no
   restart:
     description:
       - Use with started state to force a matching container to be stopped and restarted.
     type: bool
-    default: 'no'
+    default: no
   restart_policy:
     description:
       - Container restart policy. Place quotes around I(no) option.
+    type: str
     choices:
       - 'no'
       - 'on-failure'
@@ -474,10 +522,12 @@ options:
       - 'unless-stopped'
   restart_retries:
     description:
-       - Use with restart policy to control maximum number of restart attempts.
+      - Use with restart policy to control maximum number of restart attempts.
+    type: int
   runtime:
     description:
       - Runtime to use for the container.
+    type: str
     version_added: "2.8"
   shm_size:
     description:
@@ -485,9 +535,11 @@ options:
         Unit can be C(B) (byte), C(K) (kibibyte, 1024B), C(M) (mebibyte), C(G) (gibibyte),
         C(T) (tebibyte), or C(P) (pebibyte)."
       - Omitting the unit defaults to bytes. If you omit the size entirely, the system uses C(64M).
+    type: str
   security_opts:
     description:
       - List of security options in the form of C("label:user:User")
+    type: list
   state:
     description:
       - 'I(absent) - A container matching the specified name will be stopped and removed. Use force_kill to kill the container
@@ -509,6 +561,7 @@ options:
         with a removed container.'
       - 'I(stopped) - Asserts that the container is first I(present), and then if the container is running moves it to a stopped
         state. Use force_kill to kill a container rather than stopping it.'
+    type: str
     default: started
     choices:
       - absent
@@ -518,6 +571,7 @@ options:
   stop_signal:
     description:
       - Override default signal used to stop the container.
+    type: str
   stop_timeout:
     description:
       - Number of seconds to wait for the container to stop before sending SIGKILL.
@@ -528,34 +582,40 @@ options:
         the behavior depends on the version of docker. New versions of docker will
         always use the container's configured C(StopTimeout) value if it has been
         configured.
+    type: int
   trust_image_content:
     description:
       - If C(yes), skip image verification.
     type: bool
-    default: 'no'
+    default: no
   tmpfs:
     description:
       - Mount a tmpfs directory
+    type: list
     version_added: 2.4
   tty:
     description:
       - Allocate a pseudo-TTY.
     type: bool
-    default: 'no'
+    default: no
   ulimits:
     description:
       - "List of ulimit options. A ulimit is specified as C(nofile:262144:262144)"
+    type: list
   sysctls:
     description:
       - Dictionary of key,value pairs.
+    type: dict
     version_added: 2.4
   user:
     description:
       - Sets the username or UID used and optionally the groupname or GID for the specified command.
       - "Can be [ user | user:group | uid | uid:gid | user:gid | uid:group ]"
+    type: str
   uts:
     description:
       - Set the UTS namespace mode for the container.
+    type: str
   volumes:
     description:
       - List of volumes to mount within the container.
@@ -567,41 +627,37 @@ options:
         private label for the volume.
       - "Note that Ansible 2.7 and earlier only supported one mode, which had to be one of C(ro), C(rw),
         C(z), and C(Z)."
+    type: list
   volume_driver:
     description:
       - The container volume driver.
+    type: str
   volumes_from:
     description:
       - List of container names or Ids to get volumes from.
+    type: list
   working_dir:
     description:
       - Path to the working directory.
+    type: str
     version_added: "2.4"
 extends_documentation_fragment:
-    - docker
+  - docker
+  - docker.docker_py_1_documentation
 
 author:
-    - "Cove Schneider (@cove)"
-    - "Joshua Conner (@joshuaconner)"
-    - "Pavel Antonov (@softzilla)"
-    - "Thomas Steinbach (@ThomasSteinbach)"
-    - "Philippe Jandot (@zfil)"
-    - "Daan Oosterveld (@dusdanig)"
-    - "Chris Houseknecht (@chouseknecht)"
-    - "Kassian Sun (@kassiansun)"
+  - "Cove Schneider (@cove)"
+  - "Joshua Conner (@joshuaconner)"
+  - "Pavel Antonov (@softzilla)"
+  - "Thomas Steinbach (@ThomasSteinbach)"
+  - "Philippe Jandot (@zfil)"
+  - "Daan Oosterveld (@dusdanig)"
+  - "Chris Houseknecht (@chouseknecht)"
+  - "Kassian Sun (@kassiansun)"
 
 requirements:
-    - "python >= 2.6"
-    - "docker-py >= 1.8.0"
-    - "Please note that the L(docker-py,https://pypi.org/project/docker-py/) Python
-       module has been superseded by L(docker,https://pypi.org/project/docker/)
-       (see L(here,https://github.com/docker/docker-py/issues/1310) for details).
-       For Python 2.6, C(docker-py) must be used. Otherwise, it is recommended to
-       install the C(docker) Python module. Note that both modules should I(not)
-       be installed at the same time. Also note that when both modules are installed
-       and one of them is uninstalled, the other might no longer function and a
-       reinstall of it is required."
-    - "Docker API >= 1.20"
+  - "docker-py >= 1.8.0"
+  - "Docker API >= 1.20"
 '''
 
 EXAMPLES = '''
@@ -638,7 +694,9 @@ EXAMPLES = '''
      - "8080:9000"
      - "127.0.0.1:8081:9001/udp"
     env:
-        SECRET_KEY: ssssh
+        SECRET_KEY: "ssssh"
+        # Values which might be parsed as numbers, booleans or other types by the YAML parser need to be quoted
+        BOOLEAN_KEY: "yes"
 
 - name: Container present
   docker_container:
@@ -756,8 +814,8 @@ EXAMPLES = '''
     name: test
     image: ubuntu:18.04
     env:
-      - arg1: true
-      - arg2: whatever
+      - arg1: "true"
+      - arg2: "whatever"
     volumes:
       - /tmp:/tmp
     comparisons:
@@ -770,8 +828,8 @@ EXAMPLES = '''
     name: test
     image: ubuntu:18.04
     env:
-      - arg1: true
-      - arg2: whatever
+      - arg1: "true"
+      - arg2: "whatever"
     comparisons:
       '*': ignore  # by default, ignore *all* options (including image)
       env: strict   # except for environment variables; there, we want to be strict
@@ -815,11 +873,13 @@ EXAMPLES = '''
 '''
 
 RETURN = '''
-docker_container:
+container:
     description:
-      - Before 2.3 this was 'ansible_docker_container' but was renamed due to conflicts with the connection plugin.
       - Facts representing the current state of the container. Matches the docker inspection output.
-      - Note that facts are not part of registered vars but accessible directly.
+      - Note that facts are part of the registered vars since Ansible 2.8. For compatibility reasons, the facts
+        are also accessible directly as C(docker_container). Note that the returned fact will be removed in Ansible 2.12.
+      - Before 2.3 this was C(ansible_docker_container) but was renamed in 2.3 to C(docker_container) due to
+        conflicts with the connection plugin.
       - Empty if C(state) is I(absent)
       - If detached is I(False), will include Output attribute containing any output from container run.
     returned: always
@@ -861,27 +921,30 @@ docker_container:
 import os
 import re
 import shlex
-from datetime import timedelta
 from distutils.version import LooseVersion
 
 from ansible.module_utils.basic import human_to_bytes
-from ansible.module_utils.docker_common import (
+from ansible.module_utils.docker.common import (
     AnsibleDockerClient,
-    DockerBaseClass, sanitize_result, is_image_name_id,
-    compare_generic, DifferenceTracker,
+    DifferenceTracker,
+    DockerBaseClass,
+    compare_generic,
+    is_image_name_id,
+    sanitize_result,
+    parse_healthcheck
 )
 from ansible.module_utils.six import string_types
 
 try:
     from docker import utils
-    from ansible.module_utils.docker_common import docker_version
+    from ansible.module_utils.docker.common import docker_version
     if LooseVersion(docker_version) >= LooseVersion('1.10.0'):
         from docker.types import Ulimit, LogConfig
     else:
         from docker.utils.types import Ulimit, LogConfig
     from docker.errors import APIError, NotFound
-except Exception as dummy:
-    # missing docker-py handled in ansible.module_utils.docker
+except Exception:
+    # missing docker-py handled in ansible.module_utils.docker.common
     pass
 
 
@@ -901,7 +964,7 @@ def is_volume_permissions(input):
     return True
 
 
-def parse_port_range(range_or_port, module):
+def parse_port_range(range_or_port, client):
     '''
     Parses a string containing either a single port or a range of ports.
 
@@ -910,13 +973,13 @@ def parse_port_range(range_or_port, module):
     if '-' in range_or_port:
         start, end = [int(port) for port in range_or_port.split('-')]
         if end < start:
-            module.fail_json(msg='Invalid port range: {0}'.format(range_or_port))
+            client.fail('Invalid port range: {0}'.format(range_or_port))
         return list(range(start, end + 1))
     else:
         return [int(range_or_port)]
 
 
-def split_colon_ipv6(input, module):
+def split_colon_ipv6(input, client):
     '''
     Split string by ':', while keeping IPv6 addresses in square brackets in one component.
     '''
@@ -931,7 +994,7 @@ def split_colon_ipv6(input, module):
             break
         j = input.find(']', i)
         if j < 0:
-            module.fail_json(msg='Cannot find closing "]" in input "{0}" for opening "[" at index {1}!'.format(input, i + 1))
+            client.fail('Cannot find closing "]" in input "{0}" for opening "[" at index {1}!'.format(input, i + 1))
         result.extend(input[start:i].split(':'))
         k = input.find(':', j)
         if k < 0:
@@ -1012,6 +1075,7 @@ class TaskParameters(DockerBaseClass):
         self.oom_score_adj = None
         self.paused = None
         self.pid_mode = None
+        self.pids_limit = None
         self.privileged = None
         self.purge_networks = None
         self.pull = None
@@ -1078,11 +1142,16 @@ class TaskParameters(DockerBaseClass):
         self.ulimits = self._parse_ulimits()
         self.sysctls = self._parse_sysctls()
         self.log_config = self._parse_log_config()
-        self.healthcheck, self.disable_healthcheck = self._parse_healthcheck()
+        try:
+            self.healthcheck, self.disable_healthcheck = parse_healthcheck(self.healthcheck)
+        except ValueError as e:
+            self.fail(str(e))
+
         self.exp_links = None
         self.volume_binds = self._get_volume_binds(self.volumes)
         self.pid_mode = self._replace_container_names(self.pid_mode)
         self.ipc_mode = self._replace_container_names(self.ipc_mode)
+        self.network_mode = self._replace_container_names(self.network_mode)
 
         self.log("volumes:")
         self.log(self.volumes, pretty_print=True)
@@ -1119,7 +1188,7 @@ class TaskParameters(DockerBaseClass):
                 self._process_rate_iops(option=param_name)
 
     def fail(self, msg):
-        self.client.module.fail_json(msg=msg)
+        self.client.fail(msg)
 
     @property
     def update_parameters(self):
@@ -1276,6 +1345,7 @@ class TaskParameters(DockerBaseClass):
             device_write_bps='device_write_bps',
             device_read_iops='device_read_iops',
             device_write_iops='device_write_iops',
+            pids_limit='pids_limit',
         )
 
         if self.client.docker_py_version >= LooseVersion('1.9') and self.client.docker_api_version >= LooseVersion('1.22'):
@@ -1328,25 +1398,25 @@ class TaskParameters(DockerBaseClass):
 
         binds = {}
         for port in self.published_ports:
-            parts = split_colon_ipv6(str(port), self.client.module)
+            parts = split_colon_ipv6(str(port), self.client)
             container_port = parts[-1]
             protocol = ''
             if '/' in container_port:
                 container_port, protocol = parts[-1].split('/')
-            container_ports = parse_port_range(container_port, self.client.module)
+            container_ports = parse_port_range(container_port, self.client)
 
             p_len = len(parts)
             if p_len == 1:
                 port_binds = len(container_ports) * [(default_ip,)]
             elif p_len == 2:
-                port_binds = [(default_ip, port) for port in parse_port_range(parts[0], self.client.module)]
+                port_binds = [(default_ip, port) for port in parse_port_range(parts[0], self.client)]
             elif p_len == 3:
                 # We only allow IPv4 and IPv6 addresses for the bind address
                 if not re.match(r'^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$', parts[0]) and not re.match(r'^\[[0-9a-fA-F:]+\]$', parts[0]):
                     self.fail(('Bind addresses for published ports must be IPv4 or IPv6 addresses, not hostnames. '
                                'Use the dig lookup to resolve hostnames. (Found hostname: {0})').format(parts[0]))
                 if parts[1]:
-                    port_binds = [(parts[0], port) for port in parse_port_range(parts[1], self.client.module)]
+                    port_binds = [(parts[0], port) for port in parse_port_range(parts[1], self.client)]
                 else:
                     port_binds = len(container_ports) * [(parts[0],)]
 
@@ -1493,81 +1563,6 @@ class TaskParameters(DockerBaseClass):
         except ValueError as exc:
             self.fail('Error parsing logging options - %s' % (exc))
 
-    def _parse_healthcheck(self):
-        '''
-        Return dictionary of healthcheck parameters
-        '''
-        if (not self.healthcheck) or (not self.healthcheck.get('test')):
-            return None, None
-
-        result = dict()
-
-        # all the supported healthecheck parameters
-        options = dict(
-            test='test',
-            interval='interval',
-            timeout='timeout',
-            start_period='start_period',
-            retries='retries'
-        )
-
-        duration_options = ['interval', 'timeout', 'start_period']
-
-        for (key, value) in options.items():
-            if value in self.healthcheck:
-                if self.healthcheck.get(value) is None:
-                    # due to recursive argument_spec, all keys are always present
-                    # (but have default value None if not specified)
-                    continue
-                if value in duration_options:
-                    time = self._convert_duration_to_nanosecond(self.healthcheck.get(value))
-                    if time:
-                        result[key] = time
-                elif self.healthcheck.get(value):
-                    result[key] = self.healthcheck.get(value)
-                    if key == 'test':
-                        if isinstance(result[key], (tuple, list)):
-                            result[key] = [str(e) for e in result[key]]
-                        else:
-                            result[key] = ["CMD-SHELL", str(result[key])]
-                    elif key == 'retries':
-                        try:
-                            result[key] = int(result[key])
-                        except Exception as e:
-                            self.fail('Cannot parse number of retries for healthcheck. '
-                                      'Expected an integer, got "{0}".'.format(result[key]))
-
-        if result['test'] == ['NONE']:
-            # If the user explicitly disables the healthcheck, return None
-            # as the healthcheck object, and set disable_healthcheck to True
-            return None, True
-
-        return result, False
-
-    def _convert_duration_to_nanosecond(self, time_str):
-        '''
-        Return time duration in nanosecond
-        '''
-        if not isinstance(time_str, str):
-            self.fail("Missing unit in duration - %s" % time_str)
-
-        regex = re.compile(r'^(((?P<hours>\d+)h)?((?P<minutes>\d+)m(?!s))?((?P<seconds>\d+)s)?((?P<milliseconds>\d+)ms)?((?P<microseconds>\d+)us)?)$')
-        parts = regex.match(time_str)
-
-        if not parts:
-            self.fail("Invalid time duration - %s" % time_str)
-
-        parts = parts.groupdict()
-        time_params = {}
-        for (name, value) in parts.items():
-            if value:
-                time_params[name] = int(value)
-
-        time = timedelta(**time_params)
-        time_in_nanoseconds = int(time.total_seconds() * 1000000000)
-
-        return time_in_nanoseconds
-
     def _parse_tmpfs(self):
         '''
         Turn tmpfs into a hash of Tmpfs objects
@@ -1596,6 +1591,9 @@ class TaskParameters(DockerBaseClass):
                 final_env[name] = str(value)
         if self.env:
             for name, value in self.env.items():
+                if not isinstance(value, string_types):
+                    self.fail("Non-string value found for env option. "
+                              "Ambiguous env options must be wrapped in quotes to avoid YAML parsing. Key: %s" % (name, ))
                 final_env[name] = str(value)
         return final_env
 
@@ -1686,13 +1684,9 @@ class Container(DockerBaseClass):
         self.parameters_map['expected_cmd'] = 'command'
         self.parameters_map['expected_devices'] = 'devices'
         self.parameters_map['expected_healthcheck'] = 'healthcheck'
-        self.parameters_map['device_read_bps'] = 'device_read_bps'
-        self.parameters_map['device_write_bps'] = 'device_write_bps'
-        self.parameters_map['device_read_iops'] = 'device_read_iops'
-        self.parameters_map['device_write_iops'] = 'device_write_iops'
 
     def fail(self, msg):
-        self.parameters.client.module.fail_json(msg=msg)
+        self.parameters.client.fail(msg)
 
     @property
     def exists(self):
@@ -1814,6 +1808,7 @@ class Container(DockerBaseClass):
             device_write_bps=host_config.get('BlkioDeviceWriteBps'),
             device_read_iops=host_config.get('BlkioDeviceReadIOps'),
             device_write_iops=host_config.get('BlkioDeviceWriteIOps'),
+            pids_limit=host_config.get('PidsLimit'),
         )
         # Options which don't make sense without their accompanying option
         if self.parameters.restart_policy:
@@ -1854,6 +1849,9 @@ class Container(DockerBaseClass):
 
         differences = DifferenceTracker()
         for key, value in config_mapping.items():
+            minimal_version = self.parameters.client.option_minimal_versions.get(key, {})
+            if not minimal_version.get('supported', True):
+                continue
             compare = self.parameters.client.comparisons[self.parameters_map.get(key, key)]
             self.log('check differences %s %s vs %s (%s)' % (key, getattr(self.parameters, key), str(value), compare))
             if getattr(self.parameters, key, None) is not None:
@@ -2256,6 +2254,7 @@ class ContainerManager(DockerBaseClass):
 
         if self.facts:
             self.results['ansible_facts'] = {'docker_container': self.facts}
+            self.results['container'] = self.facts
 
     def present(self, state):
         container = self._get_container(self.parameters.name)
@@ -2290,7 +2289,7 @@ class ContainerManager(DockerBaseClass):
                 if image_different:
                     self.diff['image_different'] = True
                 self.log("differences")
-                self.log(differences, pretty_print=True)
+                self.log(differences.get_legacy_docker_container_diffs(), pretty_print=True)
                 image_to_use = self.parameters.image
                 if not image_to_use and container and container.Image:
                     image_to_use = container.Image
@@ -2347,7 +2346,7 @@ class ContainerManager(DockerBaseClass):
             self.container_remove(container.Id)
 
     def fail(self, msg, **kwargs):
-        self.client.module.fail_json(msg=msg, **sanitize_result(kwargs))
+        self.client.fail(msg, **kwargs)
 
     def _output_logs(self, msg):
         self.client.module.log(msg=msg)
@@ -2539,7 +2538,7 @@ class ContainerManager(DockerBaseClass):
             while True:
                 try:
                     response = self.client.remove_container(container_id, v=volume_state, link=link, force=force)
-                except NotFound as exc:
+                except NotFound as dummy:
                     pass
                 except APIError as exc:
                     if 'Unpause the container before stopping or killing' in exc.explanation:
@@ -2627,6 +2626,16 @@ class ContainerManager(DockerBaseClass):
                 # We only loop when explicitly requested by 'continue'
                 break
         return response
+
+
+def detect_ipvX_address_usage(client):
+    '''
+    Helper function to detect whether any specified network uses ipv4_address or ipv6_address
+    '''
+    for network in client.module.params.get("networks") or []:
+        if network.get('ipv4_address') is not None or network.get('ipv6_address') is not None:
+            return True
+    return False
 
 
 class AnsibleDockerClientContainer(AnsibleDockerClient):
@@ -2736,27 +2745,34 @@ class AnsibleDockerClientContainer(AnsibleDockerClient):
             self.module.warn('The ignore_image option has been overridden by the comparisons option!')
         self.comparisons = comparisons
 
-    def _get_minimal_versions(self):
-        # Helper function to detect whether any specified network uses ipv4_address or ipv6_address
-        def detect_ipvX_address_usage():
-            for network in self.module.params.get("networks") or []:
-                if 'ipv4_address' in network or 'ipv6_address' in network:
-                    return True
-            return False
+    def _get_additional_minimal_versions(self):
+        stop_timeout_supported = self.docker_api_version >= LooseVersion('1.25')
+        stop_timeout_needed_for_update = self.module.params.get("stop_timeout") is not None and self.module.params.get('state') != 'absent'
+        if stop_timeout_supported:
+            stop_timeout_supported = self.docker_py_version >= LooseVersion('2.1')
+            if stop_timeout_needed_for_update and not stop_timeout_supported:
+                # We warn (instead of fail) since in older versions, stop_timeout was not used
+                # to update the container's configuration, but only when stopping a container.
+                self.module.warn("docker or docker-py version is %s. Minimum version required is 2.1 to update "
+                                 "the container's stop_timeout configuration. "
+                                 "If you use the 'docker-py' module, you have to switch to the docker 'Python' package." % (docker_version,))
+        else:
+            if stop_timeout_needed_for_update and not stop_timeout_supported:
+                # We warn (instead of fail) since in older versions, stop_timeout was not used
+                # to update the container's configuration, but only when stopping a container.
+                self.module.warn("docker API version is %s. Minimum version required is 1.25 to set or "
+                                 "update the container's stop_timeout configuration." % (self.docker_api_version_str,))
+        self.option_minimal_versions['stop_timeout']['supported'] = stop_timeout_supported
 
-        self.option_minimal_versions = dict(
+    def __init__(self, **kwargs):
+        option_minimal_versions = dict(
             # internal options
             log_config=dict(),
             publish_all_ports=dict(),
             ports=dict(),
             volume_binds=dict(),
             name=dict(),
-        )
-        for option, data in self.module.argument_spec.items():
-            if option in self.__NON_CONTAINER_PROPERTY_OPTIONS:
-                continue
-            self.option_minimal_versions[option] = dict()
-        self.option_minimal_versions.update(dict(
+            # normal options
             device_read_bps=dict(docker_py_version='1.9.0', docker_api_version='1.22'),
             device_read_iops=dict(docker_py_version='1.9.0', docker_api_version='1.22'),
             device_write_bps=dict(docker_py_version='1.9.0', docker_api_version='1.22'),
@@ -2779,76 +2795,19 @@ class AnsibleDockerClientContainer(AnsibleDockerClient):
             sysctls=dict(docker_py_version='1.10.0', docker_api_version='1.24'),
             userns_mode=dict(docker_py_version='1.10.0', docker_api_version='1.23'),
             uts=dict(docker_py_version='3.5.0', docker_api_version='1.25'),
+            pids_limit=dict(docker_py_version='1.10.0', docker_api_version='1.23'),
             # specials
             ipvX_address_supported=dict(docker_py_version='1.9.0', detect_usage=detect_ipvX_address_usage,
                                         usage_msg='ipv4_address or ipv6_address in networks'),
-            stop_timeout=dict(),  # see below!
-        ))
+            stop_timeout=dict(),  # see _get_additional_minimal_versions()
+        )
 
-        for option, data in self.option_minimal_versions.items():
-            # Test whether option is supported, and store result
-            support_docker_py = True
-            support_docker_api = True
-            if 'docker_py_version' in data:
-                support_docker_py = self.docker_py_version >= LooseVersion(data['docker_py_version'])
-            if 'docker_api_version' in data:
-                support_docker_api = self.docker_api_version >= LooseVersion(data['docker_api_version'])
-            data['supported'] = support_docker_py and support_docker_api
-            # Fail if option is not supported but used
-            if not data['supported']:
-                # Test whether option is specified
-                if 'detect_usage' in data:
-                    used = data['detect_usage']()
-                else:
-                    used = self.module.params.get(option) is not None
-                    if used and 'default' in self.module.argument_spec[option]:
-                        used = self.module.params[option] != self.module.argument_spec[option]['default']
-                if used:
-                    # If the option is used, compose error message.
-                    if 'usage_msg' in data:
-                        usg = data['usage_msg']
-                    else:
-                        usg = 'set %s option' % (option, )
-                    if not support_docker_api:
-                        msg = 'docker API version is %s. Minimum version required is %s to %s.'
-                        msg = msg % (self.docker_api_version_str, data['docker_api_version'], usg)
-                    elif not support_docker_py:
-                        if LooseVersion(data['docker_py_version']) < LooseVersion('2.0.0'):
-                            msg = ("docker-py version is %s. Minimum version required is %s to %s. "
-                                   "Consider switching to the 'docker' package if you do not require Python 2.6 support.")
-                        elif self.docker_py_version < LooseVersion('2.0.0'):
-                            msg = ("docker-py version is %s. Minimum version required is %s to %s. "
-                                   "You have to switch to the Python 'docker' package. First uninstall 'docker-py' before "
-                                   "installing 'docker' to avoid a broken installation.")
-                        else:
-                            msg = "docker version is %s. Minimum version required is %s to %s."
-                        msg = msg % (docker_version, data['docker_py_version'], usg)
-                    else:
-                        # should not happen
-                        msg = 'Cannot %s with your configuration.' % (usg, )
-                    self.fail(msg)
-
-        stop_timeout_supported = self.docker_api_version >= LooseVersion('1.25')
-        stop_timeout_needed_for_update = self.module.params.get("stop_timeout") is not None and self.module.params.get('state') != 'absent'
-        if stop_timeout_supported:
-            stop_timeout_supported = self.docker_py_version >= LooseVersion('2.1')
-            if stop_timeout_needed_for_update and not stop_timeout_supported:
-                # We warn (instead of fail) since in older versions, stop_timeout was not used
-                # to update the container's configuration, but only when stopping a container.
-                self.module.warn("docker or docker-py version is %s. Minimum version required is 2.1 to update "
-                                 "the container's stop_timeout configuration. "
-                                 "If you use the 'docker-py' module, you have to switch to the docker 'Python' package." % (docker_version,))
-        else:
-            if stop_timeout_needed_for_update and not stop_timeout_supported:
-                # We warn (instead of fail) since in older versions, stop_timeout was not used
-                # to update the container's configuration, but only when stopping a container.
-                self.module.warn("docker API version is %s. Minimum version required is 1.25 to set or "
-                                 "update the container's stop_timeout configuration." % (self.docker_api_version_str,))
-        self.option_minimal_versions['stop_timeout']['supported'] = stop_timeout_supported
-
-    def __init__(self, **kwargs):
-        super(AnsibleDockerClientContainer, self).__init__(**kwargs)
-        self._get_minimal_versions()
+        super(AnsibleDockerClientContainer, self).__init__(
+            option_minimal_versions=option_minimal_versions,
+            option_minimal_versions_ignore_params=self.__NON_CONTAINER_PROPERTY_OPTIONS,
+            **kwargs
+        )
+        self._get_additional_minimal_versions()
         self._parse_comparisons()
 
 
@@ -2892,7 +2851,7 @@ def main():
         env=dict(type='dict'),
         env_file=dict(type='path'),
         etc_hosts=dict(type='dict'),
-        exposed_ports=dict(type='list', aliases=['exposed', 'expose'], elements='str'),
+        exposed_ports=dict(type='list', elements='str', aliases=['exposed', 'expose']),
         force_kill=dict(type='bool', default=False, aliases=['forcekill']),
         groups=dict(type='list', elements='str'),
         healthcheck=dict(type='dict', options=dict(
@@ -2923,7 +2882,7 @@ def main():
         name=dict(type='str', required=True),
         network_mode=dict(type='str'),
         networks=dict(type='list', elements='dict', options=dict(
-            name=dict(required=True, type='str'),
+            name=dict(type='str', required=True),
             ipv4_address=dict(type='str'),
             ipv6_address=dict(type='str'),
             aliases=dict(type='list', elements='str'),
@@ -2934,19 +2893,20 @@ def main():
         output_logs=dict(type='bool', default=False),
         paused=dict(type='bool', default=False),
         pid_mode=dict(type='str'),
+        pids_limit=dict(type='int'),
         privileged=dict(type='bool', default=False),
-        published_ports=dict(type='list', aliases=['ports'], elements='str'),
+        published_ports=dict(type='list', elements='str', aliases=['ports']),
         pull=dict(type='bool', default=False),
         purge_networks=dict(type='bool', default=False),
         read_only=dict(type='bool', default=False),
         recreate=dict(type='bool', default=False),
         restart=dict(type='bool', default=False),
         restart_policy=dict(type='str', choices=['no', 'on-failure', 'always', 'unless-stopped']),
-        restart_retries=dict(type='int', default=None),
-        runtime=dict(type='str', default=None),
+        restart_retries=dict(type='int'),
+        runtime=dict(type='str'),
         security_opts=dict(type='list', elements='str'),
         shm_size=dict(type='str'),
-        state=dict(type='str', choices=['absent', 'present', 'started', 'stopped'], default='started'),
+        state=dict(type='str', default='started', choices=['absent', 'present', 'started', 'stopped']),
         stop_signal=dict(type='str'),
         stop_timeout=dict(type='int'),
         sysctls=dict(type='dict'),

@@ -262,13 +262,13 @@ class AzureRM(object):
                 self.credentials.get('client_id') is not None and \
                 self.credentials.get('tenant') is not None:
 
-                self.azure_credentials = self.acquire_token_with_username_password(
-                    self._adfs_authority_url,
-                    self._resource,
-                    self.credentials['ad_user'],
-                    self.credentials['password'],
-                    self.credentials['client_id'],
-                    self.credentials['tenant'])
+            self.azure_credentials = self.acquire_token_with_username_password(
+                self._adfs_authority_url,
+                self._resource,
+                self.credentials['ad_user'],
+                self.credentials['password'],
+                self.credentials['client_id'],
+                self.credentials['tenant'])
 
         elif self.credentials.get('ad_user') is not None and self.credentials.get('password') is not None:
             tenant = self.credentials.get('tenant')
@@ -305,7 +305,7 @@ class AzureRM(object):
         for key in AZURE_CREDENTIAL_ENV_MAPPING:
             try:
                 credentials[key] = config.get(profile, key, raw=True)
-            except:
+            except Exception:
                 pass
 
         if credentials.get('client_id') is not None or credentials.get('ad_user') is not None:
@@ -571,7 +571,7 @@ class AzureKeyVaultSecret:
         try:
             config = cp.ConfigParser()
             config.read(path)
-        except:
+        except Exception:
             pass
 
         if config is not None:
@@ -579,7 +579,7 @@ class AzureKeyVaultSecret:
             for key in AZURE_VAULT_SETTINGS:
                 try:
                     settings[key] = config.get('azure_keyvault', key, raw=True)
-                except:
+                except Exception:
                     pass
 
         return settings

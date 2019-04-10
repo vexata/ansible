@@ -324,6 +324,21 @@ This result can be converted to canonical form with ``ipaddr()`` to produce a su
     # {{ net_mask | ipaddr('net') }}
     '192.168.0.0/24'
 
+Getting information about the network in CIDR notation
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+Given an IP address, the ``ipaddr()`` filter can produce the network address in CIDR notation.
+This can be useful when you want to obtain the network address from the IP address in CIDR format.
+
+Here's an example of IP address::
+
+    ip_address = "{{ ansible_default_ipv4.address }}/{{ ansible_default_ipv4.netmask }}"
+    '192.168.0.11/255.255.255.0'
+
+This can be used to obtain the network address in CIDR notation format::
+
+    # {{ ip_address | ipaddr('network/prefix') }}
+    '192.168.0.0/24'
 
 IP address conversion
 ^^^^^^^^^^^^^^^^^^^^^
@@ -353,6 +368,13 @@ integers into IP addresses::
 
     # {{ test_list | ipaddr('address') | ipaddr('int') }}
     [3222798849, 1, '3232243712/24', '338288524927261089654018896841347694848/10', '42540766412265424405338506004571095040/64']
+    
+You can convert IPv4 address to `Hexadecimal notation <https://en.wikipedia.org/wiki/Hexadecimal>`_ with optional delimiter::
+
+    # {{ '192.168.1.5' | ip4_hex }}
+    c0a80105
+    # {{ '192.168.1.5' | ip4_hex(':') }}
+    c0:a8:01:05
 
 You can convert IP addresses to PTR records::
 

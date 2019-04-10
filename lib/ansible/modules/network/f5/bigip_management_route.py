@@ -64,10 +64,11 @@ EXAMPLES = r'''
     description: Route to TACACS
     gateway: 10.10.10.10
     network: 11.11.11.0/24
-    password: secret
-    server: lb.mydomain.com
     state: present
-    user: admin
+    provider:
+      user: admin
+      password: secret
+      server: lb.mydomain.com
   delegate_to: localhost
 '''
 
@@ -75,17 +76,17 @@ RETURN = r'''
 description:
   description: The new description of the management route.
   returned: changed
-  type: string
+  type: str
   sample: Route to TACACS
 gateway:
   description: The new gateway of the management route.
   returned: changed
-  type: string
+  type: str
   sample: 10.10.10.10
 network:
   description: The new network to use for the management route.
   returned: changed
-  type: string
+  type: str
   sample: default
 '''
 
@@ -213,6 +214,8 @@ class Difference(object):
     @property
     def network(self):
         if self.want.network is None:
+            return None
+        if self.want.network == '0.0.0.0/0' and self.have.network == 'default':
             return None
         if self.want.network != self.have.network:
             raise F5ModuleError(

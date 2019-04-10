@@ -28,77 +28,83 @@ options:
   archive_path:
     description:
       - Use with state C(present) to archive an image to a .tar file.
-    required: false
+    type: path
     version_added: "2.1"
+  cache_from:
+    description:
+      - List of image names to consider as cache source.
+    type: list
+    version_added: "2.8"
   load_path:
     description:
       - Use with state C(present) to load an image from a .tar file.
-    required: false
+    type: path
     version_added: "2.2"
   dockerfile:
     description:
       - Use with state C(present) to provide an alternate name for the Dockerfile to use when building an image.
-    required: false
+    type: str
     version_added: "2.0"
   force:
     description:
       - Use with state I(absent) to un-tag and remove all images matching the specified name. Use with state
         C(present) to build, load or pull an image when the image already exists.
-    default: false
-    required: false
-    version_added: "2.1"
     type: bool
+    default: no
+    version_added: "2.1"
   http_timeout:
     description:
       - Timeout for HTTP requests during the image build operation. Provide a positive integer value for the number of
         seconds.
-    required: false
+    type: int
     version_added: "2.1"
   name:
     description:
       - "Image name. Name format will be one of: name, repository/name, registry_server:port/name.
         When pushing or pulling an image the name can optionally include the tag by appending ':tag_name'."
       - Note that image IDs (hashes) are not supported.
-    required: true
+    type: str
+    required: yes
   path:
     description:
       - Use with state 'present' to build an image. Will be the path to a directory containing the context and
         Dockerfile for building an image.
+    type: path
     aliases:
       - build_path
-    required: false
   pull:
     description:
       - When building an image downloads any updates to the FROM image in Dockerfile.
-    default: true
-    required: false
-    version_added: "2.1"
     type: bool
+    default: yes
+    version_added: "2.1"
   push:
     description:
       - Push the image to the registry. Specify the registry as part of the I(name) or I(repository) parameter.
-    default: false
-    required: false
-    version_added: "2.2"
     type: bool
+    default: no
+    version_added: "2.2"
   rm:
     description:
       - Remove intermediate containers after build.
-    default: true
-    required: false
-    version_added: "2.1"
     type: bool
+    default: yes
+    version_added: "2.1"
+  network:
+    description:
+      - The network to use for C(RUN) build instructions.
+    type: str
+    version_added: "2.8"
   nocache:
     description:
       - Do not use cache when building an image.
-    default: false
-    required: false
     type: bool
+    default: no
   repository:
     description:
       - Full path to a repository. Use with state C(present) to tag the image into the repository. Expects
         format I(repository:tag). If no tag is provided, will use the value of the C(tag) parameter or I(latest).
-    required: false
+    type: str
     version_added: "2.1"
   state:
     description:
@@ -110,9 +116,9 @@ options:
         from Docker Hub. To build the image, provide a path value set to a directory containing a context and
         Dockerfile. To load an image, specify load_path to provide a path to an archive file. To tag an image to a
         repository, provide a repository path. If the name contains a repository path, it will be pushed.
-      - "NOTE: C(build) is DEPRECATED and will be removed in release 2.3. Specifying C(build) will behave the
+      - "NOTE: C(build) is DEPRECATED and will be removed in release 2.11. Specifying C(build) will behave the
          same as C(present)."
-    required: false
+    type: str
     default: present
     choices:
       - absent
@@ -123,60 +129,58 @@ options:
       - Used to select an image when pulling. Will be added to the image when pushing, tagging or building. Defaults to
         I(latest).
       - If C(name) parameter format is I(name:tag), then tag value from C(name) will take precedence.
+    type: str
     default: latest
-    required: false
   buildargs:
     description:
       - Provide a dictionary of C(key:value) build arguments that map to Dockerfile ARG directive.
       - Docker expects the value to be a string. For convenience any non-string values will be converted to strings.
       - Requires Docker API >= 1.21.
-    required: false
+    type: dict
     version_added: "2.2"
   container_limits:
     description:
       - A dictionary of limits applied to each container created by the build process.
-    required: false
-    version_added: "2.1"
+    type: dict
     suboptions:
       memory:
         description:
           - Set memory limit for build.
+        type: int
       memswap:
         description:
           - Total memory (memory + swap), -1 to disable swap.
+        type: int
       cpushares:
         description:
           - CPU shares (relative weight).
+        type: int
       cpusetcpus:
         description:
           - CPUs in which to allow execution, e.g., "0-3", "0,1".
+        type: str
+    version_added: "2.1"
   use_tls:
     description:
-      - "DEPRECATED. Whether to use tls to connect to the docker server. Set to C(no) when TLS will not be used. Set to
-        C(encrypt) to use TLS. And set to C(verify) to use TLS and verify that the server's certificate is valid for the
-        server. NOTE: If you specify this option, it will set the value of the tls or tls_verify parameters."
+      - "DEPRECATED. Whether to use tls to connect to the docker server. Set to
+        C(encrypt) to use TLS. And set to C(verify) to use TLS and verify that
+        the server's certificate is valid for the server."
+      - "NOTE: If you specify this option, it will set the value of the I(tls) or
+        I(tls_verify) parameters if not set to I(no)."
+      - Will be removed in Ansible 2.11.
+    type: str
     choices:
       - 'no'
       - 'encrypt'
       - 'verify'
-    default: 'no'
-    required: false
     version_added: "2.0"
 
 extends_documentation_fragment:
-    - docker
+  - docker
+  - docker.docker_py_1_documentation
 
 requirements:
-  - "python >= 2.6"
   - "docker-py >= 1.8.0"
-  - "Please note that the L(docker-py,https://pypi.org/project/docker-py/) Python
-     module has been superseded by L(docker,https://pypi.org/project/docker/)
-     (see L(here,https://github.com/docker/docker-py/issues/1310) for details).
-     For Python 2.6, C(docker-py) must be used. Otherwise, it is recommended to
-     install the C(docker) Python module. Note that both modules should I(not)
-     be installed at the same time. Also note that when both modules are installed
-     and one of them is uninstalled, the other might no longer function and a
-     reinstall of it is required."
   - "Docker API >= 1.20"
 
 author:
@@ -193,17 +197,23 @@ EXAMPLES = '''
 
 - name: Tag and push to docker hub
   docker_image:
-    name: pacur/centos-7
-    repository: dcoppenhagan/myimage
-    tag: 7.0
+    name: pacur/centos-7:56
+    repository: dcoppenhagan/myimage:7.56
     push: yes
 
 - name: Tag and push to local registry
   docker_image:
+     # Image will be centos:7
      name: centos
+     # Will be pushed to localhost:5000/centos:7
      repository: localhost:5000/centos
      tag: 7
      push: yes
+
+- name: Add tag latest to image
+  docker_image:
+    name: myimage:7.1.2
+    repository: myimage:latest
 
 - name: Remove image
   docker_image:
@@ -238,6 +248,15 @@ EXAMPLES = '''
      buildargs:
        log_volume: /var/log/myapp
        listen_port: 8080
+
+- name: Build image using cache source
+  docker_image:
+    name: myimage:latest
+    path: /path/to/build/dir
+    # Use as cache source for building myimage
+    cache_from:
+      - nginx:latest
+      - alpine:3.8
 '''
 
 RETURN = '''
@@ -250,7 +269,7 @@ image:
 import os
 import re
 
-from ansible.module_utils.docker_common import (
+from ansible.module_utils.docker.common import (
     HAS_DOCKER_PY_2, HAS_DOCKER_PY_3, AnsibleDockerClient, DockerBaseClass, is_image_name_id,
 )
 from ansible.module_utils._text import to_native
@@ -278,11 +297,13 @@ class ImageManager(DockerBaseClass):
         self.check_mode = self.client.check_mode
 
         self.archive_path = parameters.get('archive_path')
+        self.cache_from = parameters.get('cache_from')
         self.container_limits = parameters.get('container_limits')
         self.dockerfile = parameters.get('dockerfile')
         self.force = parameters.get('force')
         self.load_path = parameters.get('load_path')
         self.name = parameters.get('name')
+        self.network = parameters.get('network')
         self.nocache = parameters.get('nocache')
         self.path = parameters.get('path')
         self.pull = parameters.get('pull')
@@ -521,7 +542,7 @@ class ImageManager(DockerBaseClass):
             pull=self.pull,
             forcerm=self.rm,
             dockerfile=self.dockerfile,
-            decode=True
+            decode=True,
         )
         if not HAS_DOCKER_PY_3:
             params['stream'] = True
@@ -534,6 +555,10 @@ class ImageManager(DockerBaseClass):
             for key, value in self.buildargs.items():
                 self.buildargs[key] = to_native(value)
             params['buildargs'] = self.buildargs
+        if self.cache_from:
+            params['cache_from'] = self.cache_from
+        if self.network:
+            params['network_mode'] = self.network
 
         for line in self.client.build(**params):
             # line = json.loads(line)
@@ -583,6 +608,7 @@ class ImageManager(DockerBaseClass):
 def main():
     argument_spec = dict(
         archive_path=dict(type='path'),
+        cache_from=dict(type='list', elements='str'),
         container_limits=dict(type='dict', options=dict(
             memory=dict(type='int'),
             memswap=dict(type='int'),
@@ -594,23 +620,40 @@ def main():
         http_timeout=dict(type='int'),
         load_path=dict(type='path'),
         name=dict(type='str', required=True),
+        network=dict(type='str'),
         nocache=dict(type='bool', default=False),
         path=dict(type='path', aliases=['build_path']),
         pull=dict(type='bool', default=True),
         push=dict(type='bool', default=False),
         repository=dict(type='str'),
         rm=dict(type='bool', default=True),
-        state=dict(type='str', choices=['absent', 'present', 'build'], default='present'),
+        state=dict(type='str', default='present', choices=['absent', 'present', 'build']),
         tag=dict(type='str', default='latest'),
-        use_tls=dict(type='str', default='no', choices=['no', 'encrypt', 'verify']),
-        buildargs=dict(type='dict', default=None),
+        use_tls=dict(type='str', choices=['no', 'encrypt', 'verify'], removed_in_version='2.11'),
+        buildargs=dict(type='dict'),
+    )
+
+    option_minimal_versions = dict(
+        cache_from=dict(docker_py_version='2.1.0', docker_api_version='1.25'),
+        network=dict(docker_py_version='2.4.0', docker_api_version='1.25'),
     )
 
     client = AnsibleDockerClient(
         argument_spec=argument_spec,
         supports_check_mode=True,
+        min_docker_version='1.8.0',
         min_docker_api_version='1.20',
+        option_minimal_versions=option_minimal_versions,
     )
+
+    if client.module.params['state'] == 'build':
+        client.module.warn('The "build" state has been deprecated for a long time '
+                           'and will be removed in Ansible 2.11. Please use '
+                           '"present", which has the same meaning as "build".')
+    if client.module.params['use_tls']:
+        client.module.warn('The "use_tls" option has been deprecated for a long time '
+                           'and will be removed in Ansible 2.11. Please use the'
+                           '"tls" and "tls_verify" options instead.')
 
     results = dict(
         changed=False,

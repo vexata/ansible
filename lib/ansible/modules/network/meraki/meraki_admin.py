@@ -25,15 +25,18 @@ options:
         description:
         - Name of the dashboard administrator.
         - Required when creating a new administrator.
+        type: str
     email:
         description:
         - Email address for the dashboard administrator.
         - Email cannot be updated.
         - Required when creating or editing an administrator.
+        type: str
     orgAccess:
         description:
         - Privileges assigned to the administrator in the organization.
         choices: [ full, none, read-only ]
+        type: str
     tags:
         description:
         - Tags the administrator has privileges on.
@@ -45,18 +48,22 @@ options:
         - When creating a new administrator, C(org_name), C(network), or C(tags) must be specified.
     state:
         description:
-        - Create or modify an organization
+        - Create or modify, or delete an organization
+        - If C(state) is C(absent), name takes priority over email if both are specified.
         choices: [ absent, present, query ]
         required: true
+        type: str
     org_name:
         description:
         - Name of organization.
         - Used when C(name) should refer to another object.
         - When creating a new administrator, C(org_name), C(network), or C(tags) must be specified.
         aliases: ['organization']
+        type: str
     org_id:
         description:
         - ID of organization.
+        type: str
 author:
     - Kevin Breit (@kbreit)
 extends_documentation_fragment: meraki
@@ -128,18 +135,38 @@ data:
         email:
             description: Email address of administrator.
             returned: success
-            type: string
+            type: str
             sample: your@email.com
         id:
             description: Unique identification number of administrator.
             returned: success
-            type: string
+            type: str
             sample: 1234567890
         name:
             description: Given name of administrator.
             returned: success
-            type: string
+            type: str
             sample: John Doe
+        accountStatus:
+            description: Status of account.
+            returned: success
+            type: str
+            sample: ok
+        twoFactorAuthEnabled:
+            description: Enabled state of two-factor authentication for administrator.
+            returned: success
+            type: bool
+            sample: false
+        hasApiKey:
+            description: Defines whether administrator has an API assigned to their account.
+            returned: success
+            type: bool
+            sample: false
+        lastActive:
+            description: Date and time of time the administrator was active within Dashboard.
+            returned: success
+            type: str
+            sample: 2019-01-28 14:58:56 -0800
         networks:
             description: List of networks administrator has access on.
             returned: success
@@ -148,12 +175,12 @@ data:
                 id:
                      description: The network ID.
                      returned: when network permissions are set
-                     type: string
+                     type: str
                      sample: N_0123456789
                 access:
                      description: Access level of administrator. Options are 'full', 'read-only', or 'none'.
                      returned: when network permissions are set
-                     type: string
+                     type: str
                      sample: read-only
         tags:
             description: Tags the adminsitrator has access on.
@@ -163,18 +190,19 @@ data:
                 tag:
                     description: Tag name.
                     returned: when tag permissions are set
-                    type: string
+                    type: str
                     sample: production
                 access:
                     description: Access level of administrator. Options are 'full', 'read-only', or 'none'.
                     returned: when tag permissions are set
-                    type: string
+                    type: str
                     sample: full
         orgAccess:
             description: The privilege of the dashboard administrator on the organization. Options are 'full', 'read-only', or 'none'.
             returned: success
-            type: string
+            type: str
             sample: full
+
 '''
 
 import os
@@ -208,7 +236,7 @@ def get_admin_id(meraki, data, name=None, email=None):
                     admin_id = a['id']
         elif meraki.params['email']:
             if meraki.params['email'] == a['email']:
-                    return a['id']
+                return a['id']
     if admin_id is None:
         meraki.fail_json(msg='No admin_id found')
     return admin_id
@@ -305,7 +333,7 @@ def main():
                          tags=dict(type='json'),
                          networks=dict(type='json'),
                          org_name=dict(type='str', aliases=['organization']),
-                         org_id=dict(type='int'),
+                         org_id=dict(type='str'),
                          )
 
     # seed the result dict in the object

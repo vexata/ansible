@@ -47,6 +47,7 @@ options:
     description:
       - Whether or not the destination snapshots of the copied AMI should be encrypted.
     version_added: "2.2"
+    type: bool
   kms_key_id:
     description:
       - KMS key id used to encrypt image. If not specified, uses default EBS Customer Master Key (CMK) for your account.
@@ -70,6 +71,7 @@ options:
       - Whether to use tags if the source AMI already exists in the target region. If this is set, and all tags match
         in an existing AMI, the AMI will not be copied again.
     default: false
+    type: bool
     version_added: 2.6
 author:
 - Amir Moulavi (@amir343) <amir.moulavi@gmail.com>
@@ -135,7 +137,7 @@ RETURN = '''
 image_id:
   description: AMI ID of the copied AMI
   returned: always
-  type: string
+  type: str
   sample: ami-e689729e
 '''
 

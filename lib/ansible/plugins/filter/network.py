@@ -93,7 +93,10 @@ def parse_cli(output, tmpl):
     except ImportError as exc:
         raise AnsibleError(to_native(exc))
 
-    spec = yaml.safe_load(open(tmpl).read())
+    with open(tmpl) as tmpl_fh:
+        tmpl_content = tmpl_fh.read()
+
+    spec = yaml.safe_load(tmpl_content)
     obj = {}
 
     for name, attrs in iteritems(spec['keys']):
@@ -102,7 +105,7 @@ def parse_cli(output, tmpl):
         try:
             variables = spec.get('vars', {})
             value = template(value, variables)
-        except:
+        except Exception:
             pass
 
         if 'start_block' in attrs and 'end_block' in attrs:
@@ -151,7 +154,7 @@ def parse_cli(output, tmpl):
                     for k, v in iteritems(value):
                         try:
                             obj[k] = template(v, {'item': items}, fail_on_undefined=False)
-                        except:
+                        except Exception:
                             obj[k] = None
                     objects.append(obj)
 
@@ -269,7 +272,7 @@ def _extract_param(template, root, attrs, value):
             fields = None
             try:
                 fields = element.findall(param_xpath)
-            except:
+            except Exception:
                 display.warning("Failed to evaluate value of '%s' with XPath '%s'.\nUnexpected error: %s." % (param, param_xpath, traceback.format_exc()))
 
             tags = param_xpath.split('/')
@@ -330,7 +333,10 @@ def parse_xml(output, tmpl):
     except ImportError as exc:
         raise AnsibleError(to_native(exc))
 
-    spec = yaml.safe_load(open(tmpl).read())
+    with open(tmpl) as tmpl_fh:
+        tmpl_content = tmpl_fh.read()
+
+    spec = yaml.safe_load(tmpl_content)
     obj = {}
 
     for name, attrs in iteritems(spec['keys']):
@@ -339,7 +345,7 @@ def parse_xml(output, tmpl):
         try:
             variables = spec.get('vars', {})
             value = template(value, variables)
-        except:
+        except Exception:
             pass
 
         if 'items' in attrs:

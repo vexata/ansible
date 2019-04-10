@@ -197,22 +197,24 @@ author:
 EXAMPLES = r'''
 - name: Add virtual address
   bigip_virtual_address:
-    server: lb.mydomain.net
-    user: admin
-    password: secret
     state: present
     partition: Common
     address: 10.10.10.10
+    provider:
+      server: lb.mydomain.net
+      user: admin
+      password: secret
   delegate_to: localhost
 
 - name: Enable route advertisement on the virtual address
   bigip_virtual_address:
-    server: lb.mydomain.net
-    user: admin
-    password: secret
     state: present
     address: 10.10.10.10
     use_route_advertisement: yes
+    provider:
+      server: lb.mydomain.net
+      user: admin
+      password: secret
   delegate_to: localhost
 '''
 
@@ -225,12 +227,12 @@ use_route_advertisement:
 auto_delete:
   description: New setting for auto deleting virtual address.
   returned: changed
-  type: string
+  type: str
   sample: enabled
 icmp_echo:
   description: New ICMP echo setting applied to virtual address.
   returned: changed
-  type: string
+  type: str
   sample: disabled
 connection_limit:
   description: The new connection limit of the virtual address.
@@ -255,12 +257,12 @@ address:
 state:
   description: The new state of the virtual address.
   returned: changed
-  type: string
+  type: str
   sample: disabled
 spanning:
   description: Whether spanning is enabled or not
   returned: changed
-  type: string
+  type: str
   sample: disabled
 '''
 

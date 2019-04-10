@@ -243,7 +243,7 @@ RETURN = '''
 cache_updated:
     description: if the cache was updated or not
     returned: success, in some cases
-    type: boolean
+    type: bool
     sample: True
 cache_update_time:
     description: time of the last cache update (0 if unknown)
@@ -253,12 +253,12 @@ cache_update_time:
 stdout:
     description: output from apt
     returned: success, when needed
-    type: string
+    type: str
     sample: "Reading package lists...\nBuilding dependency tree...\nReading state information...\nThe following extra packages will be installed:\n  apache2-bin ..."
 stderr:
     description: error output from apt
     returned: success, when needed
-    type: string
+    type: str
     sample: "AH00558: apache2: Could not reliably determine the server's fully qualified domain name, using 127.0.1.1. Set the 'ServerName' directive globally to ..."
 '''  # NOQA
 
@@ -357,7 +357,7 @@ class PolicyRcD(object):
         if self.backup_dir:
             try:
                 shutil.move('/usr/sbin/policy-rc.d', self.backup_dir)
-            except:
+            except Exception:
                 self.m.fail_json(msg="Fail to move /usr/sbin/policy-rc.d to %s" % self.backup_dir)
 
         # we write /usr/sbin/policy-rc.d so it always exit with code policy_rc_d
@@ -366,7 +366,7 @@ class PolicyRcD(object):
                 policy_rc_d.write('#!/bin/sh\nexit %d\n' % self.m.params['policy_rc_d'])
 
             os.chmod('/usr/sbin/policy-rc.d', 0o0755)
-        except:
+        except Exception:
             self.m.fail_json(msg="Failed to create or chmod /usr/sbin/policy-rc.d")
 
     def __exit__(self, type, value, traceback):
@@ -385,7 +385,7 @@ class PolicyRcD(object):
                 shutil.move(os.path.join(self.backup_dir, 'policy-rc.d'),
                             '/usr/sbin/policy-rc.d')
                 os.rmdir(self.tmpdir_name)
-            except:
+            except Exception:
                 self.m.fail_json(msg="Fail to move back %s to /usr/sbin/policy-rc.d"
                                      % os.path.join(self.backup_dir, 'policy-rc.d'))
         else:
@@ -393,7 +393,7 @@ class PolicyRcD(object):
             # we just remove the file
             try:
                 os.remove('/usr/sbin/policy-rc.d')
-            except:
+            except Exception:
                 self.m.fail_json(msg="Fail to remove /usr/sbin/policy-rc.d (after package manipulation)")
 
 
@@ -1056,8 +1056,8 @@ def main():
 
     use_apt_get = p['force_apt_get']
 
-    if not use_apt_get and not APTITUDE_CMD and p.get('upgrade', None) in ['full', 'safe', 'yes']:
-        module.warn("Could not find aptitude. Using apt-get instead.")
+    if not use_apt_get and not APTITUDE_CMD:
+        module.warn("Could not find aptitude. Using apt-get instead")
         use_apt_get = True
 
     updated_cache = False

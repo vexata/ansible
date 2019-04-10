@@ -28,14 +28,14 @@ options:
 EXAMPLES = """
     - name: run ontap cli command
       na_ontap_command:
-        hostname: "{{ hostname }} "
+        hostname: "{{ hostname }}"
         username: "{{ admin username }}"
         password: "{{ admin password }}"
         command: ['version']
 
     - name: run ontap cli command
       na_ontap_command:
-        hostname: "{{ hostname }} "
+        hostname: "{{ hostname }}"
         username: "{{ admin username }}"
         password: "{{ admin password }}"
         command: ['network', 'interface', 'show']
@@ -94,12 +94,12 @@ class NetAppONTAPCommand(object):
 
 
 def main():
-        """
-        Execute action from playbook
-        """
-        command = NetAppONTAPCommand()
-        command.apply()
+    """
+    Execute action from playbook
+    """
+    command = NetAppONTAPCommand()
+    command.apply()
 
 
 if __name__ == '__main__':
-        main()
+    main()

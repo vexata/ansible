@@ -169,7 +169,7 @@ disk_status:
 
 import re
 try:
-    from pyVmomi import vim, vmodl
+    from pyVmomi import vim
 except ImportError:
     pass
 
@@ -629,7 +629,7 @@ def main():
         uuid=dict(type='str'),
         folder=dict(type='str'),
         datacenter=dict(type='str', required=True),
-        disk=dict(type=list, default=[]),
+        disk=dict(type='list', default=[]),
     )
     module = AnsibleModule(argument_spec=argument_spec,
                            required_one_of=[['name', 'uuid']])

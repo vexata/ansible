@@ -35,9 +35,10 @@ EXAMPLES = r'''
 - name: Set the hostname of the BIG-IP
   bigip_hostname:
     hostname: bigip.localhost.localdomain
-    password: secret
-    server: lb.mydomain.com
-    user: admin
+    provider:
+      user: admin
+      password: secret
+      server: lb.mydomain.com
   delegate_to: localhost
 '''
 
@@ -45,7 +46,7 @@ RETURN = r'''
 hostname:
   description: The new hostname of the device
   returned: changed
-  type: string
+  type: str
   sample: big-ip01.internal
 '''
 

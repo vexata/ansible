@@ -41,6 +41,11 @@ except ImportError:
 DOCKER_COMPLETION = {}
 COVERAGE_PATHS = {}  # type: dict[str, str]
 
+try:
+    MAXFD = subprocess.MAXFD
+except AttributeError:
+    MAXFD = -1
+
 
 def get_docker_completion():
     """
@@ -375,23 +380,30 @@ def raw_command(cmd, capture=False, env=None, data=None, cwd=None, explain=False
         stderr = None
 
     start = time.time()
+    process = None
 
     try:
-        process = subprocess.Popen(cmd, env=env, stdin=stdin, stdout=stdout, stderr=stderr, cwd=cwd)
-    except OSError as ex:
-        if ex.errno == errno.ENOENT:
-            raise ApplicationError('Required program "%s" not found.' % cmd[0])
-        raise
+        try:
+            process = subprocess.Popen(cmd, env=env, stdin=stdin, stdout=stdout, stderr=stderr, cwd=cwd)
+        except OSError as ex:
+            if ex.errno == errno.ENOENT:
+                raise ApplicationError('Required program "%s" not found.' % cmd[0])
+            raise
 
-    if communicate:
-        encoding = 'utf-8'
-        data_bytes = data.encode(encoding, 'surrogateescape') if data else None
-        stdout_bytes, stderr_bytes = process.communicate(data_bytes)
-        stdout_text = stdout_bytes.decode(encoding, str_errors) if stdout_bytes else u''
-        stderr_text = stderr_bytes.decode(encoding, str_errors) if stderr_bytes else u''
-    else:
-        process.wait()
-        stdout_text, stderr_text = None, None
+        if communicate:
+            encoding = 'utf-8'
+            data_bytes = data.encode(encoding, 'surrogateescape') if data else None
+            stdout_bytes, stderr_bytes = process.communicate(data_bytes)
+            stdout_text = stdout_bytes.decode(encoding, str_errors) if stdout_bytes else u''
+            stderr_text = stderr_bytes.decode(encoding, str_errors) if stderr_bytes else u''
+        else:
+            process.wait()
+            stdout_text, stderr_text = None, None
+    finally:
+        if process and process.returncode is None:
+            process.kill()
+            display.info('')  # the process we're interrupting may have completed a partial line of output
+            display.notice('Killed command to avoid an orphaned child process during handling of an unexpected exception.')
 
     status = process.returncode
     runtime = time.time() - start
@@ -737,10 +749,13 @@ class MissingEnvironmentVariable(ApplicationError):
 
 class CommonConfig(object):
     """Configuration common to all commands."""
-    def __init__(self, args):
+    def __init__(self, args, command):
         """
         :type args: any
+        :type command: str
         """
+        self.command = command
+
         self.color = args.color  # type: bool
         self.explain = args.explain  # type: bool
         self.verbosity = args.verbosity  # type: int
@@ -751,6 +766,8 @@ class CommonConfig(object):
         if is_shippable():
             self.redact = True
 
+        self.cache = {}
+
 
 def docker_qualify_image(name):
     """
@@ -760,6 +777,29 @@ def docker_qualify_image(name):
     config = get_docker_completion().get(name, {})
 
     return config.get('name', name)
+
+
+@contextlib.contextmanager
+def named_temporary_file(args, prefix, suffix, directory, content):
+    """
+    :param args: CommonConfig
+    :param prefix: str
+    :param suffix: str
+    :param directory: str
+    :param content: str | bytes | unicode
+    :rtype: str
+    """
+    if not isinstance(content, bytes):
+        content = content.encode('utf-8')
+
+    if args.explain:
+        yield os.path.join(directory, '%stemp%s' % (prefix, suffix))
+    else:
+        with tempfile.NamedTemporaryFile(prefix=prefix, suffix=suffix, dir=directory) as tempfile_fd:
+            tempfile_fd.write(content)
+            tempfile_fd.flush()
+
+            yield tempfile_fd.name
 
 
 def parse_to_list_of_dict(pattern, value):

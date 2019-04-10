@@ -97,12 +97,14 @@ DOCUMENTATION = """
 """
 
 import base64
+import logging
 import os
 import re
 import traceback
 import json
 import tempfile
 import subprocess
+import xml.etree.ElementTree as ET
 
 HAVE_KERBEROS = False
 try:
@@ -111,8 +113,10 @@ try:
 except ImportError:
     pass
 
+from ansible import constants as C
 from ansible.errors import AnsibleError, AnsibleConnectionFailure
 from ansible.errors import AnsibleFileNotFound
+from ansible.module_utils.json_utils import _filter_non_json_lines
 from ansible.module_utils.parsing.convert_bool import boolean
 from ansible.module_utils.six.moves.urllib.parse import urlunsplit
 from ansible.module_utils._text import to_bytes, to_native, to_text
@@ -133,6 +137,7 @@ try:
     import winrm
     from winrm import Response
     from winrm.protocol import Protocol
+    import requests.exceptions
     HAS_WINRM = True
 except ImportError as e:
     HAS_WINRM = False
@@ -173,7 +178,6 @@ class Connection(ConnectionBase):
 
     transport = 'winrm'
     module_implementation_preferences = ('.ps1', '.exe', '')
-    become_methods = ['runas']
     allow_executable = False
     has_pipelining = True
     allow_extras = True
@@ -190,6 +194,11 @@ class Connection(ConnectionBase):
 
         super(Connection, self).__init__(*args, **kwargs)
 
+        if not C.DEFAULT_DEBUG:
+            logging.getLogger('requests_credssp').setLevel(logging.INFO)
+            logging.getLogger('requests_kerberos').setLevel(logging.INFO)
+            logging.getLogger('urllib3').setLevel(logging.INFO)
+
     def _build_winrm_kwargs(self):
         # this used to be in set_options, as win_reboot needs to be able to
         # override the conn timeout, we need to be able to build the args
@@ -198,10 +207,6 @@ class Connection(ConnectionBase):
         self._winrm_host = self.get_option('remote_addr')
         self._winrm_user = self.get_option('remote_user')
         self._winrm_pass = self._play_context.password
-
-        self._become_method = self._play_context.become_method
-        self._become_user = self._play_context.become_user
-        self._become_pass = self._play_context.become_pass
 
         self._winrm_port = self.get_option('port')
 
@@ -364,7 +369,7 @@ class Connection(ConnectionBase):
 
         winrm_host = self._winrm_host
         if HAS_IPADDRESS:
-            display.vvvv("checking if winrm_host %s is an IPv6 address" % winrm_host)
+            display.debug("checking if winrm_host %s is an IPv6 address" % winrm_host)
             try:
                 ipaddress.IPv6Address(winrm_host)
             except ipaddress.AddressValueError:
@@ -447,7 +452,9 @@ class Connection(ConnectionBase):
                         self._winrm_send_input(self.protocol, self.shell_id, command_id, data, eof=is_last)
 
             except Exception as ex:
-                display.warning("FATAL ERROR DURING FILE TRANSFER: %s" % to_text(ex))
+                display.warning("ERROR DURING WINRM SEND INPUT - attempting to recover: %s %s"
+                                % (type(ex).__name__, to_text(ex)))
+                display.debug(traceback.format_exc())
                 stdin_push_failed = True
 
             # NB: this can hang if the receiver is still running (eg, network failed a Send request but the server's still happy).
@@ -467,13 +474,23 @@ class Connection(ConnectionBase):
             display.vvvvvv('WINRM STDERR %s' % to_text(response.std_err), host=self._winrm_host)
 
             if stdin_push_failed:
-                stderr = to_bytes(response.std_err, encoding='utf-8')
-                if self.is_clixml(stderr):
-                    stderr = self.parse_clixml_stream(stderr)
+                # There are cases where the stdin input failed but the WinRM service still processed it. We attempt to
+                # see if stdout contains a valid json return value so we can ignore this error
+                try:
+                    filtered_output, dummy = _filter_non_json_lines(response.std_out)
+                    json.loads(filtered_output)
+                except ValueError:
+                    # stdout does not contain a return response, stdin input was a fatal error
+                    stderr = to_bytes(response.std_err, encoding='utf-8')
+                    if self.is_clixml(stderr):
+                        stderr = self.parse_clixml_stream(stderr)
 
-                raise AnsibleError('winrm send_input failed; \nstdout: %s\nstderr %s' % (to_native(response.std_out), to_native(stderr)))
+                    raise AnsibleError('winrm send_input failed; \nstdout: %s\nstderr %s'
+                                       % (to_native(response.std_out), to_native(stderr)))
 
             return response
+        except requests.exceptions.ConnectionError as exc:
+            raise AnsibleConnectionFailure('winrm connection error: %s' % to_native(exc))
         finally:
             if command_id:
                 self.protocol.cleanup_command(self.shell_id, command_id)
@@ -531,14 +548,17 @@ class Connection(ConnectionBase):
         return (result.status_code, result.std_out, result.std_err)
 
     def is_clixml(self, value):
-        return value.startswith(b"#< CLIXML")
+        return value.startswith(b"#< CLIXML\r\n")
 
     # hacky way to get just stdout- not always sure of doc framing here, so use with care
     def parse_clixml_stream(self, clixml_doc, stream_name='Error'):
-        clear_xml = clixml_doc.replace(b'#< CLIXML\r\n', b'')
-        doc = xmltodict.parse(clear_xml)
-        lines = [l.get('#text', '').replace('_x000D__x000A_', '') for l in doc.get('Objs', {}).get('S', {}) if l.get('@S') == stream_name]
-        return '\r\n'.join(lines)
+        clixml = ET.fromstring(clixml_doc.split(b"\r\n", 1)[-1])
+        namespace_match = re.match(r'{(.*)}', clixml.tag)
+        namespace = "{%s}" % namespace_match.group(1) if namespace_match else ""
+
+        strings = clixml.findall("./%sS" % namespace)
+        lines = [e.text.replace('_x000D__x000A_', '') for e in strings if e.attrib.get('S') == stream_name]
+        return to_bytes('\r\n'.join(lines))
 
     # FUTURE: determine buffer size at runtime via remote winrm config?
     def _put_file_stdin_iterator(self, in_path, out_path, buffer_size=250000):

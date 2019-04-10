@@ -1,7 +1,7 @@
 #!/usr/bin/python
-#
-# Copyright (c) 2017 Sertac Ozercan, <seozerca@microsoft.com>
+# -*- coding: utf-8 -*-
 
+# Copyright: (c) 2017, Sertac Ozercan <seozerca@microsoft.com>
 # GNU General Public License v3.0+ (see COPYING or https://www.gnu.org/licenses/gpl-3.0.txt)
 
 from __future__ import absolute_import, division, print_function
@@ -55,17 +55,17 @@ author:
 EXAMPLES = '''
     - name: Get facts for a virtual machine scale set
       azure_rm_virtualmachine_scaleset_facts:
-        resource_group: Testing
+        resource_group: myResourceGroup
         name: testvmss001
         format: curated
 
     - name: Get facts for all virtual networks
       azure_rm_virtualmachine_scaleset_facts:
-        resource_group: Testing
+        resource_group: myResourceGroup
 
     - name: Get facts by tags
       azure_rm_virtualmachine_scaleset_facts:
-        resource_group: Testing
+        resource_group: myResourceGroup
         tags:
           - testing
 '''
@@ -81,7 +81,7 @@ vmss:
                 - Resource ID
             returned: always
             type: str
-            sample: /subscriptions/xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx/resourceGroups/TestGroup/providers/Microsoft.Compute/scalesets/myscaleset
+            sample: /subscriptions/xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx/resourceGroups/myResourceGroup/providers/Microsoft.Compute/scalesets/myscaleset
         admin_username:
             description:
                 - Admin username used to access the host after it is created.
@@ -182,12 +182,17 @@ vmss:
             type: str
             returned: always
             sample: Linux
+        overprovision:
+            description:
+                - Specifies whether the Virtual Machine Scale Set should be overprovisioned.
+            type: bool
+            sample: true
         resource_group:
             description:
                 - Resource group.
             type: str
             returned: always
-            sample: testrg
+            sample: myResourceGroup
         ssh_password_enabled:
             description:
                 - Is SSH password authentication enabled. Valid only for Linux.
@@ -235,7 +240,7 @@ import re
 
 try:
     from msrestazure.azure_exceptions import CloudError
-except:
+except Exception:
     # handled in azure_rm_common
     pass
 
@@ -303,7 +308,7 @@ class AzureRMVirtualMachineScaleSetFacts(AzureRMModuleBase):
                     subnet_id = (vmss['properties']['virtualMachineProfile']['networkProfile']['networkInterfaceConfigurations'][0]
                                  ['properties']['ipConfigurations'][0]['properties']['subnet']['id'])
                     subnet_name = re.sub('.*subnets\\/', '', subnet_id)
-                except:
+                except Exception:
                     self.log('Could not extract subnet name')
 
                 try:
@@ -311,13 +316,13 @@ class AzureRMVirtualMachineScaleSetFacts(AzureRMModuleBase):
                                                ['properties']['ipConfigurations'][0]['properties']['loadBalancerBackendAddressPools'][0]['id'])
                     load_balancer_name = re.sub('\\/backendAddressPools.*', '', re.sub('.*loadBalancers\\/', '', backend_address_pool_id))
                     virtual_network_name = re.sub('.*virtualNetworks\\/', '', re.sub('\\/subnets.*', '', subnet_id))
-                except:
+                except Exception:
                     self.log('Could not extract load balancer / virtual network name')
 
                 try:
                     ssh_password_enabled = (not vmss['properties']['virtualMachineProfile']['osProfile'],
                                                     ['linuxConfiguration']['disablePasswordAuthentication'])
-                except:
+                except Exception:
                     self.log('Could not extract SSH password enabled')
 
                 data_disks = vmss['properties']['virtualMachineProfile']['storageProfile'].get('dataDisks', [])
@@ -348,6 +353,7 @@ class AzureRMVirtualMachineScaleSetFacts(AzureRMModuleBase):
                     'image': vmss['properties']['virtualMachineProfile']['storageProfile']['imageReference'],
                     'os_disk_caching': vmss['properties']['virtualMachineProfile']['storageProfile']['osDisk']['caching'],
                     'os_type': 'Linux' if (vmss['properties']['virtualMachineProfile']['osProfile'].get('linuxConfiguration') is not None) else 'Windows',
+                    'overprovision': vmss['properties']['overprovision'],
                     'managed_disk_type': vmss['properties']['virtualMachineProfile']['storageProfile']['osDisk']['managedDisk']['storageAccountType'],
                     'data_disks': data_disks,
                     'virtual_network_name': virtual_network_name,
@@ -367,7 +373,7 @@ class AzureRMVirtualMachineScaleSetFacts(AzureRMModuleBase):
     def get_item(self):
         """Get a single virtual machine scale set"""
 
-        self.log('Get properties for {}'.format(self.name))
+        self.log('Get properties for {0}'.format(self.name))
 
         item = None
         results = []
@@ -390,7 +396,7 @@ class AzureRMVirtualMachineScaleSetFacts(AzureRMModuleBase):
         try:
             response = self.compute_client.virtual_machine_scale_sets.list(self.resource_group)
         except CloudError as exc:
-            self.fail('Failed to list all items - {}'.format(str(exc)))
+            self.fail('Failed to list all items - {0}'.format(str(exc)))
 
         results = []
         for item in response:

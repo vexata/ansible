@@ -210,12 +210,12 @@ enable_cache:
 cache_name:
   description: Name of the cache used by DNS.
   returned: changed
-  type: string
+  type: str
   sample: /Common/cache1
 unhandled_query_action:
   description: What to do with unhandled queries
   returned: changed
-  type: string
+  type: str
   sample: allow
 '''
 
@@ -634,7 +634,7 @@ class ModuleManager(object):
         except ValueError as ex:
             raise F5ModuleError(str(ex))
 
-        if 'code' in response and response['code'] in [400, 403]:
+        if 'code' in response and response['code'] in [400, 403, 404]:
             if 'message' in response:
                 raise F5ModuleError(response['message'])
             else:
@@ -653,7 +653,7 @@ class ModuleManager(object):
         except ValueError as ex:
             raise F5ModuleError(str(ex))
 
-        if 'code' in response and response['code'] == 400:
+        if 'code' in response and response['code'] in [400, 404]:
             if 'message' in response:
                 raise F5ModuleError(response['message'])
             else:

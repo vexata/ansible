@@ -190,6 +190,19 @@ options:
     default: 0
     type: int
     version_added: "2.8"
+  install_weak_deps:
+    description:
+      - Will also install all packages linked by a weak dependency relation.
+      - "NOTE: This feature requires yum >= 4 (RHEL/CentOS 8+)"
+    type: bool
+    default: "yes"
+    version_added: "2.8"
+  download_dir:
+    description:
+      - Specifies an alternate directory to store packages.
+      - Has an effect only if I(download_only) is specified.
+    type: str
+    version_added: "2.8"
 notes:
   - When used with a `loop:` each package will be processed individually,
     it is much more efficient to pass the list directly to the `name` option.
@@ -208,7 +221,7 @@ notes:
     of packages in a single transaction and yum requires groups to be specified
     in different ways when used in that way.  Package groups are specified as
     "@development-tools" and environment groups are "@^gnome-desktop-environment".
-    Use the "yum group list" command to see which category of group the group
+    Use the "yum group list hidden ids" command to see which category of group the group
     you want to install falls into.'
   - 'The yum module does not support clearing yum cache in an idempotent way, so it
     was decided not to implement it, the only method is to use shell and call the yum
@@ -696,7 +709,6 @@ class YumModule(YumDnf):
         # setting system proxy environment and saving old, if exists
         my = self.yum_base()
         namepass = ""
-        proxy_url = ""
         scheme = ["http", "https"]
         old_proxy_env = [os.getenv("http_proxy"), os.getenv("https_proxy")]
         try:
@@ -717,6 +729,9 @@ class YumModule(YumDnf):
                             r"(http://)",
                             r"\g<1>" + namepass, proxy_url
                         )
+                else:
+                    for item in scheme:
+                        os.environ[item + "_proxy"] = my.conf.proxy
             yield
         except yum.Errors.YumBaseError:
             raise
@@ -799,6 +814,8 @@ class YumModule(YumDnf):
 
         if self.module.check_mode:
             self.module.exit_json(changed=True, results=res['results'], changes=dict(installed=pkgs))
+        else:
+            res['changes'] = dict(installed=pkgs)
 
         lang_env = dict(LANG='C', LC_ALL='C', LC_MESSAGES='C')
         rc, out, err = self.module.run_command(cmd, environ_update=lang_env)
@@ -853,7 +870,7 @@ class YumModule(YumDnf):
             downgrade_candidate = False
 
             # check if pkgspec is installed (if possible for idempotence)
-            if spec.endswith('.rpm'):
+            if spec.endswith('.rpm') or '://' in spec:
                 if '://' not in spec and not os.path.exists(spec):
                     res['msg'] += "No RPM file matching '%s' found on system" % spec
                     res['results'].append("No RPM file matching '%s' found on system" % spec)
@@ -863,6 +880,12 @@ class YumModule(YumDnf):
                 if '://' in spec:
                     with self.set_env_proxy():
                         package = fetch_file(self.module, spec)
+                        if not package.endswith('.rpm'):
+                            # yum requires a local file to have the extension of .rpm and we
+                            # can not guarantee that from an URL (redirects, proxies, etc)
+                            new_package_path = '%s.rpm' % package
+                            os.rename(package, new_package_path)
+                            package = new_package_path
                 else:
                     package = spec
 
@@ -1028,6 +1051,8 @@ class YumModule(YumDnf):
         if pkgs:
             if self.module.check_mode:
                 self.module.exit_json(changed=True, results=res['results'], changes=dict(removed=pkgs))
+            else:
+                res['changes'] = dict(removed=pkgs)
 
             # run an actual yum transaction
             if self.autoremove:
@@ -1258,38 +1283,38 @@ class YumModule(YumDnf):
                     self.module.fail_json(**res)
 
         # check_mode output
-        if self.module.check_mode:
-            to_update = []
-            for w in will_update:
-                if w.startswith('@'):
-                    to_update.append((w, None))
-                elif w not in updates:
-                    other_pkg = will_update_from_other_package[w]
-                    to_update.append(
-                        (
-                            w,
-                            'because of (at least) %s-%s.%s from %s' % (
-                                other_pkg,
-                                updates[other_pkg]['version'],
-                                updates[other_pkg]['dist'],
-                                updates[other_pkg]['repo']
-                            )
+        to_update = []
+        for w in will_update:
+            if w.startswith('@'):
+                to_update.append((w, None))
+            elif w not in updates:
+                other_pkg = will_update_from_other_package[w]
+                to_update.append(
+                    (
+                        w,
+                        'because of (at least) %s-%s.%s from %s' % (
+                            other_pkg,
+                            updates[other_pkg]['version'],
+                            updates[other_pkg]['dist'],
+                            updates[other_pkg]['repo']
                         )
                     )
-                else:
-                    to_update.append((w, '%s.%s from %s' % (updates[w]['version'], updates[w]['dist'], updates[w]['repo'])))
-
-            if self.update_only:
-                res['changes'] = dict(installed=[], updated=to_update)
+                )
             else:
-                res['changes'] = dict(installed=pkgs['install'], updated=to_update)
+                to_update.append((w, '%s.%s from %s' % (updates[w]['version'], updates[w]['dist'], updates[w]['repo'])))
 
+        if self.update_only:
+            res['changes'] = dict(installed=[], updated=to_update)
+        else:
+            res['changes'] = dict(installed=pkgs['install'], updated=to_update)
+
+        if obsoletes:
+            res['obsoletes'] = obsoletes
+
+        # return results before we actually execute stuff
+        if self.module.check_mode:
             if will_update or pkgs['install']:
                 res['changed'] = True
-
-            if obsoletes:
-                res['obsoletes'] = obsoletes
-
             return res
 
         # run commands
@@ -1324,9 +1349,6 @@ class YumModule(YumDnf):
 
         if rc:
             res['failed'] = True
-
-        if obsoletes:
-            res['obsoletes'] = obsoletes
 
         return res
 
@@ -1368,6 +1390,9 @@ class YumModule(YumDnf):
 
         if self.download_only:
             self.yum_basecmd.extend(['--downloadonly'])
+
+            if self.download_dir:
+                self.yum_basecmd.extend(['--downloaddir=%s' % self.download_dir])
 
         if self.installroot != '/':
             # do not setup installroot by default, because of error
@@ -1465,9 +1490,6 @@ class YumModule(YumDnf):
             error_msgs.append('The Python 2 yum module is needed for this module. If you require Python 3 support use the `dnf` Ansible module instead.')
 
         self.wait_for_lock()
-
-        if self.disable_excludes and yum.__version_info__ < (3, 4):
-            self.module.fail_json(msg="'disable_includes' is available in yum version 3.4 and onwards.")
 
         if error_msgs:
             self.module.fail_json(msg='. '.join(error_msgs))

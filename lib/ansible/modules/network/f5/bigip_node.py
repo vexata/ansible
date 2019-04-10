@@ -184,6 +184,7 @@ options:
 extends_documentation_fragment: f5
 author:
   - Tim Rupp (@caphrim007)
+  - Wojciech Wypior (@wojtek0806)
 '''
 
 EXAMPLES = r'''
@@ -242,7 +243,7 @@ EXAMPLES = r'''
 - name: Add node by their FQDN
   bigip_node:
     fqdn: foo.bar.com
-    name: 10.20.30.40
+    name: foobar.net
     provider:
       server: lb.mydomain.com
       user: admin
@@ -255,7 +256,7 @@ monitor_type:
   description:
     - Changed value for the monitor_type of the node.
   returned: changed and success
-  type: string
+  type: str
   sample: m_of_n
 quorum:
   description:
@@ -273,19 +274,19 @@ description:
   description:
     - Changed value for the description of the node.
   returned: changed and success
-  type: string
+  type: str
   sample: E-Commerce webserver in ORD
 session:
   description:
     - Changed value for the internal session of the node.
   returned: changed and success
-  type: string
+  type: str
   sample: user-disabled
 state:
   description:
     - Changed value for the internal state of the node.
   returned: changed and success
-  type: string
+  type: str
   sample: m_of_n
 '''
 

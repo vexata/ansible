@@ -163,30 +163,33 @@ EXAMPLES = r'''
 - name: Create HTTP profile
   bigip_profile_http:
     name: my_profile
-    password: secret
-    server: lb.mydomain.com
     insert_xforwarded_for: yes
     redirect_rewrite: all
     state: present
-    user: admin
+    provider:
+      user: admin
+      password: secret
+      server: lb.mydomain.com
   delegate_to: localhost
 
 - name: Remove HTTP profile
   bigip_profile_http:
     name: my_profile
     state: absent
-    server: lb.mydomain.com
-    user: admin
-    password: secret
+    provider:
+      server: lb.mydomain.com
+      user: admin
+      password: secret
   delegate_to: localhost
 
 - name: Add HTTP profile for transparent proxy
   bigip_profile_http:
     name: my_profile
-    server: lb.mydomain.com
-    user: admin
     proxy_type: transparent
-    password: secret
+    provider:
+      password: secret
+      server: lb.mydomain.com
+      user: admin
   delegate_to: localhost
 '''
 
@@ -194,12 +197,12 @@ RETURN = r'''
 description:
   description: Description of the profile.
   returned: changed
-  type: string
+  type: str
   sample: My profile
 proxy_type:
   description: Specify proxy mode of the profile.
   returned: changed
-  type: string
+  type: str
   sample: explicit
 insert_xforwarded_for:
   description: Insert X-Forwarded-For-Header.
@@ -209,7 +212,7 @@ insert_xforwarded_for:
 redirect_rewrite:
   description: Rewrite URI that are part of 3xx responses.
   returned: changed
-  type: string
+  type: str
   sample: all
 encrypt_cookies:
   description: Cookie names to encrypt.
@@ -219,7 +222,7 @@ encrypt_cookies:
 dns_resolver:
   description: Configured dns resolver.
   returned: changed
-  type: string
+  type: str
   sample: '/Common/FooBar'
 '''
 
@@ -356,7 +359,7 @@ class ModuleParameters(Parameters):
     @property
     def proxy_type(self):
         if self._values['proxy_type'] is None:
-                return None
+            return None
         if self._values['proxy_type'] == 'explicit':
             if self.dns_resolver is None or self.dns_resolver == '':
                 raise F5ModuleError(
@@ -623,7 +626,7 @@ class Difference(object):
             else:
                 return self.want.encrypt_cookies
         if set(self.want.encrypt_cookies) != set(self.have.encrypt_cookies):
-                return self.want.encrypt_cookies
+            return self.want.encrypt_cookies
 
     @property
     def encrypt_cookie_secret(self):
@@ -761,7 +764,7 @@ class ModuleManager(object):
         except ValueError as ex:
             raise F5ModuleError(str(ex))
 
-        if 'code' in response and response['code'] in [400, 403]:
+        if 'code' in response and response['code'] in [400, 403, 404]:
             if 'message' in response:
                 raise F5ModuleError(response['message'])
             else:
@@ -781,7 +784,7 @@ class ModuleManager(object):
         except ValueError as ex:
             raise F5ModuleError(str(ex))
 
-        if 'code' in response and response['code'] == 400:
+        if 'code' in response and response['code'] in [400, 404]:
             if 'message' in response:
                 raise F5ModuleError(response['message'])
             else:

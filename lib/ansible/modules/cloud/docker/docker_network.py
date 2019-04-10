@@ -23,24 +23,28 @@ options:
   name:
     description:
       - Name of the network to operate on.
-    required: true
+    type: str
+    required: yes
     aliases:
       - network_name
 
   connected:
     description:
       - List of container names or container IDs to connect to a network.
+    type: list
     aliases:
       - containers
 
   driver:
     description:
       - Specify the type of network. Docker provides bridge and overlay drivers, but 3rd party drivers can also be used.
+    type: str
     default: bridge
 
   driver_options:
     description:
       - Dictionary of network settings. Consult docker docs for valid options and values.
+    type: dict
 
   force:
     description:
@@ -51,28 +55,27 @@ options:
         driver options and want an existing network to be updated to use the
         new options.
     type: bool
-    default: 'no'
+    default: no
 
   appends:
     description:
       - By default the connected list is canonical, meaning containers not on the list are removed from the network.
         Use C(appends) to leave existing containers connected.
     type: bool
-    default: 'no'
+    default: no
     aliases:
       - incremental
 
   enable_ipv6:
-    version_added: 2.8
     description:
       - Enable IPv6 networking.
     type: bool
-    default: null
-    required: false
+    version_added: 2.8
 
   ipam_driver:
     description:
       - Specify an IPAM driver.
+    type: str
 
   ipam_options:
     description:
@@ -80,16 +83,14 @@ options:
       - Deprecated in 2.8, will be removed in 2.12. Use parameter C(ipam_config) instead. In Docker 1.10.0, IPAM
         options were introduced (see L(here,https://github.com/moby/moby/pull/17316)). This module parameter addresses
         the IPAM config not the newly introduced IPAM options.
+    type: dict
 
   ipam_config:
-    version_added: 2.8
     description:
       - List of IPAM config blocks. Consult
         L(Docker docs,https://docs.docker.com/compose/compose-file/compose-file-v2/#ipam) for valid options and values.
         Note that I(iprange) is spelled differently here (we use the notation from the Docker Python SDK).
     type: list
-    default: null
-    required: false
     suboptions:
       subnet:
         description:
@@ -107,6 +108,7 @@ options:
         description:
           - Auxiliary IP addresses used by Network driver, as a mapping from hostname to IP.
         type: dict
+    version_added: 2.8
 
   state:
     description:
@@ -119,39 +121,52 @@ options:
         An empty list will leave no containers connected to the network. Use the
         C(appends) option to leave existing containers connected. Use the C(force)
         options to force re-creation of the network.
+    type: str
     default: present
     choices:
       - absent
       - present
 
   internal:
-    version_added: 2.8
     description:
       - Restrict external access to the network.
     type: bool
-    default: null
-    required: false
+    version_added: 2.8
+
+  labels:
+    description:
+      - Dictionary of labels.
+    type: dict
+    version_added: 2.8
+
+  scope:
+    description:
+      - Specify the network's scope.
+    type: str
+    choices:
+      - local
+      - global
+      - swarm
+    version_added: 2.8
+
+  attachable:
+    description:
+      - If enabled, and the network is in the global scope, non-service containers on worker nodes will be able to connect to the network.
+    type: bool
+    version_added: 2.8
 
 extends_documentation_fragment:
-    - docker
+  - docker
+  - docker.docker_py_1_documentation
 
 author:
-    - "Ben Keith (@keitwb)"
-    - "Chris Houseknecht (@chouseknecht)"
-    - "Dave Bendit (@DBendit)"
+  - "Ben Keith (@keitwb)"
+  - "Chris Houseknecht (@chouseknecht)"
+  - "Dave Bendit (@DBendit)"
 
 requirements:
-    - "python >= 2.6"
-    - "docker-py >= 1.10.0"
-    - "Please note that the L(docker-py,https://pypi.org/project/docker-py/) Python
-       module has been superseded by L(docker,https://pypi.org/project/docker/)
-       (see L(here,https://github.com/docker/docker-py/issues/1310) for details).
-       For Python 2.6, C(docker-py) must be used. Otherwise, it is recommended to
-       install the C(docker) Python module. Note that both modules should I(not)
-       be installed at the same time. Also note that when both modules are installed
-       and one of them is uninstalled, the other might no longer function and a
-       reinstall of it is required."
-    - "The docker server >= 1.10.0"
+  - "docker-py >= 1.10.0"
+  - "The docker server >= 1.10.0"
 '''
 
 EXAMPLES = '''
@@ -196,6 +211,13 @@ EXAMPLES = '''
           host1: 172.3.27.3
           host2: 172.3.27.4
 
+- name: Create a network with labels
+  docker_network:
+    name: network_four
+    labels:
+      key1: value1
+      key2: value2
+
 - name: Create a network with IPv6 IPAM config
   docker_network:
     name: network_ipv6_one
@@ -219,8 +241,11 @@ EXAMPLES = '''
 '''
 
 RETURN = '''
-facts:
-    description: Network inspection results for the affected network.
+network:
+    description:
+    - Network inspection results for the affected network.
+    - Note that facts are part of the registered vars since Ansible 2.8. For compatibility reasons, the facts
+      are also accessible directly as C(docker_network). Note that the returned fact will be removed in Ansible 2.12.
     returned: success
     type: dict
     sample: {}
@@ -230,20 +255,20 @@ import re
 
 from distutils.version import LooseVersion
 
-from ansible.module_utils.docker_common import (
+from ansible.module_utils.docker.common import (
     AnsibleDockerClient,
     DockerBaseClass,
     docker_version,
     DifferenceTracker,
+    clean_dict_booleans_for_docker_api,
 )
 
 try:
     from docker import utils
-    from docker.errors import NotFound
     if LooseVersion(docker_version) >= LooseVersion('2.0.0'):
         from docker.types import IPAMPool, IPAMConfig
-except Exception as dummy:
-    # missing docker-py handled in ansible.module_utils.docker_common
+except Exception:
+    # missing docker-py handled in ansible.module_utils.docker.common
     pass
 
 
@@ -262,8 +287,11 @@ class TaskParameters(DockerBaseClass):
         self.appends = None
         self.force = None
         self.internal = None
+        self.labels = None
         self.debug = None
         self.enable_ipv6 = None
+        self.scope = None
+        self.attachable = None
 
         for key, value in client.module.params.items():
             setattr(self, key, value)
@@ -293,21 +321,6 @@ def get_ip_version(cidr):
     raise ValueError('"{0}" is not a valid CIDR'.format(cidr))
 
 
-def get_driver_options(driver_options):
-    result = dict()
-    if driver_options is not None:
-        for k, v in driver_options.items():
-            # Go doesn't like 'True' or 'False'
-            if v is True:
-                v = 'true'
-            elif v is False:
-                v = 'false'
-            else:
-                v = str(v)
-            result[str(k)] = v
-    return result
-
-
 class DockerNetworkManager(object):
 
     def __init__(self, client):
@@ -332,7 +345,7 @@ class DockerNetworkManager(object):
             self.parameters.ipam_config = [self.parameters.ipam_options]
 
         if self.parameters.driver_options:
-            self.parameters.driver_options = get_driver_options(self.parameters.driver_options)
+            self.parameters.driver_options = clean_dict_booleans_for_docker_api(self.parameters.driver_options)
 
         state = self.parameters.state
         if state == 'present':
@@ -346,10 +359,7 @@ class DockerNetworkManager(object):
             self.results['diff'] = self.diff_result
 
     def get_existing_network(self):
-        try:
-            return self.client.inspect_network(self.parameters.network_name)
-        except NotFound:
-            return None
+        return self.client.get_network(name=self.parameters.network_name)
 
     def has_different_config(self, net):
         '''
@@ -418,17 +428,32 @@ class DockerNetworkManager(object):
                             parameter=self.parameters.enable_ipv6,
                             active=net.get('EnableIPv6', False))
 
-        if self.parameters.internal is not None:
-            if self.parameters.internal:
-                if not net.get('Internal'):
-                    differences.add('internal',
-                                    parameter=self.parameters.internal,
-                                    active=net.get('Internal'))
+        if self.parameters.internal is not None and self.parameters.internal != net.get('Internal', False):
+            differences.add('internal',
+                            parameter=self.parameters.internal,
+                            active=net.get('Internal'))
+
+        if self.parameters.scope is not None and self.parameters.scope != net.get('Scope'):
+            differences.add('scope',
+                            parameter=self.parameters.scope,
+                            active=net.get('Scope'))
+
+        if self.parameters.attachable is not None and self.parameters.attachable != net.get('Attachable', False):
+            differences.add('attachable',
+                            parameter=self.parameters.attachable,
+                            active=net.get('Attachable'))
+        if self.parameters.labels:
+            if not net.get('Labels'):
+                differences.add('labels',
+                                parameter=self.parameters.labels,
+                                active=net.get('Labels'))
             else:
-                if net.get('Internal'):
-                    differences.add('internal',
-                                    parameter=self.parameters.internal,
-                                    active=net.get('Internal'))
+                for key, value in self.parameters.labels.items():
+                    if not (key in net['Labels']) or value != net['Labels'][key]:
+                        differences.add('labels.%s' % key,
+                                        parameter=value,
+                                        active=net['Labels'].get(key))
+
         return not differences.empty, differences
 
     def create_network(self):
@@ -462,11 +487,17 @@ class DockerNetworkManager(object):
                 params['enable_ipv6'] = self.parameters.enable_ipv6
             if self.parameters.internal is not None:
                 params['internal'] = self.parameters.internal
+            if self.parameters.scope is not None:
+                params['scope'] = self.parameters.scope
+            if self.parameters.attachable is not None:
+                params['attachable'] = self.parameters.attachable
+            if self.parameters.labels:
+                params['labels'] = self.parameters.labels
 
             if not self.check_mode:
                 resp = self.client.create_network(self.parameters.network_name, **params)
 
-                self.existing_network = self.client.inspect_network(resp['Id'])
+                self.existing_network = self.client.get_network(id=resp['Id'])
             self.results['actions'].append("Created network %s with driver %s" % (self.parameters.network_name, self.parameters.driver))
             self.results['changed'] = True
 
@@ -504,7 +535,7 @@ class DockerNetworkManager(object):
                 self.disconnect_container(name)
 
     def disconnect_all_containers(self):
-        containers = self.client.inspect_network(self.parameters.network_name)['Containers']
+        containers = self.client.get_network(name=self.parameters.network_name)['Containers']
         if not containers:
             return
         for cont in containers.values():
@@ -542,7 +573,9 @@ class DockerNetworkManager(object):
         if not self.check_mode and not self.parameters.debug:
             self.results.pop('actions')
 
-        self.results['ansible_facts'] = {u'docker_network': self.get_existing_network()}
+        network_facts = self.get_existing_network()
+        self.results['ansible_facts'] = {u'docker_network': network_facts}
+        self.results['network'] = network_facts
 
     def absent(self):
         self.diff_tracker.add('exists', parameter=False, active=self.existing_network is not None)
@@ -552,19 +585,19 @@ class DockerNetworkManager(object):
 def main():
     argument_spec = dict(
         network_name=dict(type='str', required=True, aliases=['name']),
-        connected=dict(type='list', default=[], aliases=['containers'], elements='str'),
+        connected=dict(type='list', default=[], elements='str', aliases=['containers']),
         state=dict(type='str', default='present', choices=['present', 'absent']),
         driver=dict(type='str', default='bridge'),
         driver_options=dict(type='dict', default={}),
         force=dict(type='bool', default=False),
         appends=dict(type='bool', default=False, aliases=['incremental']),
         ipam_driver=dict(type='str'),
-        ipam_options=dict(type='dict', default={}, removed_in_version='2.12', options=dict(
+        ipam_options=dict(type='dict', default={}, options=dict(
             subnet=dict(type='str'),
             iprange=dict(type='str'),
             gateway=dict(type='str'),
             aux_addresses=dict(type='dict'),
-        )),
+        ), removed_in_version='2.12'),
         ipam_config=dict(type='list', elements='dict', options=dict(
             subnet=dict(type='str'),
             iprange=dict(type='str'),
@@ -573,19 +606,30 @@ def main():
         )),
         enable_ipv6=dict(type='bool'),
         internal=dict(type='bool'),
-        debug=dict(type='bool', default=False)
+        labels=dict(type='dict', default={}),
+        debug=dict(type='bool', default=False),
+        scope=dict(type='str', choices=['local', 'global', 'swarm']),
+        attachable=dict(type='bool'),
     )
 
     mutually_exclusive = [
         ('ipam_config', 'ipam_options')
     ]
 
+    option_minimal_versions = dict(
+        scope=dict(docker_py_version='2.6.0', docker_api_version='1.30'),
+        attachable=dict(docker_py_version='2.0.0', docker_api_version='1.26'),
+        labels=dict(docker_api_version='1.23'),
+    )
+
     client = AnsibleDockerClient(
         argument_spec=argument_spec,
         mutually_exclusive=mutually_exclusive,
         supports_check_mode=True,
-        min_docker_version='1.10.0'
+        min_docker_version='1.10.0',
+        min_docker_api_version='1.22',
         # "The docker server >= 1.10.0"
+        option_minimal_versions=option_minimal_versions,
     )
 
     cm = DockerNetworkManager(client)

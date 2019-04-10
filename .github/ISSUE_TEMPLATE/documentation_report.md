@@ -1,6 +1,7 @@
 ---
 name: 📝 Documentation Report
 about: Ask us about docs
+labels: docs
 ---
 <!--- Verify first that your improvement is not already reported on GitHub -->
 <!--- Also test if the latest release and devel branch are affected too -->
@@ -15,7 +16,7 @@ about: Ask us about docs
 - Documentation Report
 
 ##### COMPONENT NAME
-<!--- Write the name of the rst file, module, plugin, task or feature below -->
+<!--- Write the short name of the rst file, module, plugin, task or feature below, use your best guess if unsure -->
 
 ##### ANSIBLE VERSION
 <!--- Paste verbatim output from "ansible --version" between quotes -->

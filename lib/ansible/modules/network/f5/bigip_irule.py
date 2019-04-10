@@ -66,21 +66,23 @@ EXAMPLES = r'''
     content: "{{ lookup('template', 'irule.tcl') }}"
     module: ltm
     name: MyiRule
-    password: secret
-    server: lb.mydomain.com
     state: present
-    user: admin
+    provider:
+      user: admin
+      password: secret
+      server: lb.mydomain.com
   delegate_to: localhost
 
 - name: Add the iRule contained in static file irule.tcl to the LTM module
   bigip_irule:
     module: ltm
     name: MyiRule
-    password: secret
-    server: lb.mydomain.com
     src: irule.tcl
     state: present
-    user: admin
+    provider:
+      user: admin
+      password: secret
+      server: lb.mydomain.com
   delegate_to: localhost
 '''
 
@@ -88,17 +90,17 @@ RETURN = r'''
 module:
   description: The module that the iRule was added to
   returned: changed and success
-  type: string
+  type: str
   sample: gtm
 src:
   description: The filename that included the iRule source
   returned: changed and success, when provided
-  type: string
+  type: str
   sample: /opt/src/irules/example1.tcl
 content:
   description: The content of the iRule that was managed
   returned: changed and success
-  type: string
+  type: str
   sample: "when LB_FAILED { set wipHost [LB::server addr] }"
 '''
 
@@ -528,13 +530,9 @@ class ArgumentSpec(object):
     def __init__(self):
         self.supports_check_mode = True
         argument_spec = dict(
-            content=dict(
-                required=False,
-                default=None
-            ),
+            content=dict(),
             src=dict(
-                required=False,
-                default=None
+                type='path',
             ),
             name=dict(required=True),
             module=dict(

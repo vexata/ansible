@@ -19,6 +19,7 @@ DOCUMENTATION = '''
 '''
 
 from ansible import constants as C
+from ansible import context
 from ansible.playbook.task_include import TaskInclude
 from ansible.plugins.callback import CallbackBase
 from ansible.utils.color import colorize, hostcolor
@@ -157,11 +158,10 @@ class CallbackModule(CallbackBase):
 
         delegated_vars = result._result.get('_ansible_delegated_vars', None)
         if delegated_vars:
-            self._display.display("fatal: [%s -> %s]: UNREACHABLE! => %s" % (result._host.get_name(), delegated_vars['ansible_host'],
-                                                                             self._dump_results(result._result)),
-                                  color=C.COLOR_UNREACHABLE)
+            msg = "fatal: [%s -> %s]: UNREACHABLE! => %s" % (result._host.get_name(), delegated_vars['ansible_host'], self._dump_results(result._result))
         else:
-            self._display.display("fatal: [%s]: UNREACHABLE! => %s" % (result._host.get_name(), self._dump_results(result._result)), color=C.COLOR_UNREACHABLE)
+            msg = "fatal: [%s]: UNREACHABLE! => %s" % (result._host.get_name(), self._dump_results(result._result))
+        self._display.display(msg, color=C.COLOR_UNREACHABLE, stderr=self.display_failed_stderr)
 
     def v2_playbook_on_no_hosts_matched(self):
         self._display.display("skipping: no hosts matched", color=C.COLOR_SKIP)
@@ -327,23 +327,31 @@ class CallbackModule(CallbackBase):
         for h in hosts:
             t = stats.summarize(h)
 
-            self._display.display(u"%s : %s %s %s %s %s" % (
-                hostcolor(h, t),
-                colorize(u'ok', t['ok'], C.COLOR_OK),
-                colorize(u'changed', t['changed'], C.COLOR_CHANGED),
-                colorize(u'unreachable', t['unreachable'], C.COLOR_UNREACHABLE),
-                colorize(u'failed', t['failures'], C.COLOR_ERROR),
-                colorize(u'skipped', t['skipped'], C.COLOR_SKIP)),
+            self._display.display(
+                u"%s : %s %s %s %s %s %s %s" % (
+                    hostcolor(h, t),
+                    colorize(u'ok', t['ok'], C.COLOR_OK),
+                    colorize(u'changed', t['changed'], C.COLOR_CHANGED),
+                    colorize(u'unreachable', t['unreachable'], C.COLOR_UNREACHABLE),
+                    colorize(u'failed', t['failures'], C.COLOR_ERROR),
+                    colorize(u'skipped', t['skipped'], C.COLOR_SKIP),
+                    colorize(u'rescued', t['rescued'], C.COLOR_OK),
+                    colorize(u'ignored', t['ignored'], C.COLOR_WARN),
+                ),
                 screen_only=True
             )
 
-            self._display.display(u"%s : %s %s %s %s %s" % (
-                hostcolor(h, t, False),
-                colorize(u'ok', t['ok'], None),
-                colorize(u'changed', t['changed'], None),
-                colorize(u'unreachable', t['unreachable'], None),
-                colorize(u'failed', t['failures'], None),
-                colorize(u'skipped', t['skipped'], None)),
+            self._display.display(
+                u"%s : %s %s %s %s %s %s %s" % (
+                    hostcolor(h, t, False),
+                    colorize(u'ok', t['ok'], None),
+                    colorize(u'changed', t['changed'], None),
+                    colorize(u'unreachable', t['unreachable'], None),
+                    colorize(u'failed', t['failures'], None),
+                    colorize(u'skipped', t['skipped'], None),
+                    colorize(u'rescued', t['rescued'], None),
+                    colorize(u'ignored', t['ignored'], None),
+                ),
                 log_only=True
             )
 
@@ -370,15 +378,16 @@ class CallbackModule(CallbackBase):
             from os.path import basename
             self._display.banner("PLAYBOOK: %s" % basename(playbook._file_name))
 
+        # show CLI arguments
         if self._display.verbosity > 3:
-            # show CLI options
-            if self._options is not None:
-                for option in dir(self._options):
-                    if option.startswith('_') or option in ['read_file', 'ensure_value', 'read_module']:
-                        continue
-                    val = getattr(self._options, option)
-                    if val and self._display.verbosity > 3:
-                        self._display.display('%s: %s' % (option, val), color=C.COLOR_VERBOSE, screen_only=True)
+            if context.CLIARGS.get('args'):
+                self._display.display('Positional arguments: %s' % ' '.join(context.CLIARGS['args']),
+                                      color=C.COLOR_VERBOSE, screen_only=True)
+
+            for argument in (a for a in context.CLIARGS if a != 'args'):
+                val = context.CLIARGS[argument]
+                if val:
+                    self._display.display('%s: %s' % (argument, val), color=C.COLOR_VERBOSE, screen_only=True)
 
     def v2_runner_retry(self, result):
         task_name = result.task_name or result._task

@@ -339,7 +339,7 @@ class RHEVConn(object):
             api = API(url=url, username=user, password=password, insecure=str(insecure_api))
             api.test()
             self.conn = api
-        except:
+        except Exception:
             raise Exception("Failed to connect to RHEV-M.")
 
     def __del__(self):
@@ -588,7 +588,7 @@ class RHEVConn(object):
                 setMsg(str(e))
                 setFailed()
                 return False
-        elif int(DISK.size) < (1024 * 1024 * 1024 * int(disksize)):
+        elif int(DISK.size) > (1024 * 1024 * 1024 * int(disksize)):
             setMsg("Shrinking disks is not supported")
             setMsg(str(e))
             setFailed()
@@ -1378,7 +1378,7 @@ def core(module):
 
             # Set VM Host
             vmhost = module.params.get('vmhost')
-            if vmhost is not False and vmhost is not "False":
+            if vmhost is not False and vmhost != "False":
                 if r.setVMHost(vminfo['name'], vmhost) is False:
                     return RHEV_FAILED, msg
 

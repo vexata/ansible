@@ -37,6 +37,7 @@ from itertools import chain
 from socket import inet_aton
 
 from ansible.module_utils._text import to_text
+from ansible.module_utils.common._collections_compat import Mapping
 from ansible.module_utils.six import iteritems, string_types
 from ansible.module_utils.basic import AnsibleFallbackNotFound
 
@@ -263,7 +264,9 @@ def dict_diff(base, comparable):
         if isinstance(value, dict):
             item = comparable.get(key)
             if item is not None:
-                updates[key] = dict_diff(value, comparable[key])
+                sub_diff = dict_diff(value, comparable[key])
+                if sub_diff:
+                    updates[key] = sub_diff
         else:
             comparable_value = comparable.get(key)
             if comparable_value is not None:
@@ -301,7 +304,10 @@ def dict_merge(base, other):
             if key in other:
                 item = other.get(key)
                 if item is not None:
-                    combined[key] = dict_merge(value, other[key])
+                    if isinstance(other[key], Mapping):
+                        combined[key] = dict_merge(value, other[key])
+                    else:
+                        combined[key] = other[key]
                 else:
                     combined[key] = item
             else:
@@ -457,7 +463,7 @@ class Template:
         if value:
             try:
                 return ast.literal_eval(value)
-            except:
+            except Exception:
                 return str(value)
         else:
             return None

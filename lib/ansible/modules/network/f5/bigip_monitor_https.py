@@ -92,6 +92,15 @@ options:
         for an HTTPS monitor.
       - This parameter is only supported on BIG-IP versions 13.x and later.
     version_added: 2.8
+  up_interval:
+    description:
+      - Specifies the interval for the system to use to perform the health check
+        when a resource is up.
+      - When C(0), specifies that the system uses the interval specified in
+        C(interval) to check the health of the resource.
+      - When any other number, enables specification of a different interval to
+        use when checking the health of a resource that is up.
+    version_added: 2.8
   partition:
     description:
       - Device partition to manage resources on.
@@ -140,12 +149,12 @@ RETURN = r'''
 parent:
   description: New parent template of the monitor.
   returned: changed
-  type: string
+  type: str
   sample: https
 ip:
   description: The new IP of IP/port definition.
   returned: changed
-  type: string
+  type: str
   sample: 10.12.13.14
 interval:
   description: The new interval in which to run the monitor check.
@@ -167,6 +176,11 @@ time_until_up:
   returned: changed
   type: int
   sample: 2
+up_interval:
+  description: Interval for the system to use to perform the health check when a resource is up.
+  returned: changed
+  type: int
+  sample: 0
 '''
 
 from ansible.module_utils.basic import AnsibleModule
@@ -207,6 +221,7 @@ class Parameters(AnsibleF5Parameters):
         'recv': 'receive',
         'recvDisable': 'receive_disable',
         'sslProfile': 'ssl_profile',
+        'upInterval': 'up_interval',
     }
 
     api_attributes = [
@@ -222,6 +237,7 @@ class Parameters(AnsibleF5Parameters):
         'recvDisable',
         'description',
         'sslProfile',
+        'upInterval',
     ]
 
     returnables = [
@@ -236,6 +252,7 @@ class Parameters(AnsibleF5Parameters):
         'receive_disable',
         'description',
         'ssl_profile',
+        'up_interval',
     ]
 
     updatables = [
@@ -250,6 +267,7 @@ class Parameters(AnsibleF5Parameters):
         'receive_disable',
         'description',
         'ssl_profile',
+        'up_interval',
     ]
 
     @property
@@ -455,6 +473,10 @@ class Difference(object):
     @property
     def description(self):
         return cmp_str_with_none(self.want.description, self.have.description)
+
+    @property
+    def receive_disable(self):
+        return cmp_str_with_none(self.want.receive_disable, self.have.receive_disable)
 
 
 class ModuleManager(object):
@@ -665,8 +687,9 @@ class ArgumentSpec(object):
             description=dict(),
             send=dict(),
             receive=dict(),
-            receive_disable=dict(required=False),
+            receive_disable=dict(),
             ip=dict(),
+            up_interval=dict(type='int'),
             port=dict(),
             interval=dict(type='int'),
             timeout=dict(type='int'),

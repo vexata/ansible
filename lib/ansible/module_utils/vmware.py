@@ -1,34 +1,46 @@
 # -*- coding: utf-8 -*-
 # Copyright: (c) 2015, Joseph Callen <jcallen () csc.com>
 # Copyright: (c) 2018, Ansible Project
+# Copyright: (c) 2018, James E. King III (@jeking3) <jking@apache.org>
 # GNU General Public License v3.0+ (see COPYING or https://www.gnu.org/licenses/gpl-3.0.txt)
 
 from __future__ import absolute_import, division, print_function
 __metaclass__ = type
 
 import atexit
+import ansible.module_utils.common._collections_compat as collections_compat
+import json
 import os
+import re
 import ssl
 import time
+import traceback
 from random import randint
+from distutils.version import StrictVersion
 
+REQUESTS_IMP_ERR = None
 try:
     # requests is required for exception handling of the ConnectionError
     import requests
     HAS_REQUESTS = True
 except ImportError:
+    REQUESTS_IMP_ERR = traceback.format_exc()
     HAS_REQUESTS = False
 
+PYVMOMI_IMP_ERR = None
 try:
     from pyVim import connect
-    from pyVmomi import vim, vmodl
+    from pyVmomi import vim, vmodl, VmomiSupport
     HAS_PYVMOMI = True
+    HAS_PYVMOMIJSON = hasattr(VmomiSupport, 'VmomiJSONEncoder')
 except ImportError:
+    PYVMOMI_IMP_ERR = traceback.format_exc()
     HAS_PYVMOMI = False
+    HAS_PYVMOMIJSON = False
 
-from ansible.module_utils._text import to_text
+from ansible.module_utils._text import to_text, to_native
 from ansible.module_utils.six import integer_types, iteritems, string_types, raise_from
-from ansible.module_utils.basic import env_fallback
+from ansible.module_utils.basic import env_fallback, missing_required_lib
 
 
 class TaskError(Exception):
@@ -174,7 +186,8 @@ def find_network_by_name(content, network_name):
     return find_object_by_name(content, network_name, [vim.Network])
 
 
-def find_vm_by_id(content, vm_id, vm_id_type="vm_name", datacenter=None, cluster=None, folder=None, match_first=False):
+def find_vm_by_id(content, vm_id, vm_id_type="vm_name", datacenter=None,
+                  cluster=None, folder=None, match_first=False):
     """ UUID is unique to a VM, every other id returns the first match. """
     si = content.searchIndex
     vm = None
@@ -184,6 +197,8 @@ def find_vm_by_id(content, vm_id, vm_id_type="vm_name", datacenter=None, cluster
     elif vm_id_type == 'uuid':
         # Search By BIOS UUID rather than instance UUID
         vm = si.FindByUuid(datacenter=datacenter, instanceUuid=False, uuid=vm_id, vmSearch=True)
+    elif vm_id_type == 'instance_uuid':
+        vm = si.FindByUuid(datacenter=datacenter, instanceUuid=True, uuid=vm_id, vmSearch=True)
     elif vm_id_type == 'ip':
         vm = si.FindByIp(datacenter=datacenter, ip=vm_id, vmSearch=True)
     elif vm_id_type == 'vm_name':
@@ -313,15 +328,16 @@ def gather_vm_facts(content, vm):
             facts['hw_files'] = [files.vmPathName]
             for item in layout.snapshot:
                 for snap in item.snapshotFile:
-                    facts['hw_files'].append(files.snapshotDirectory + snap)
+                    if 'vmsn' in snap:
+                        facts['hw_files'].append(snap)
             for item in layout.configFile:
-                facts['hw_files'].append(os.path.dirname(files.vmPathName) + '/' + item)
+                facts['hw_files'].append(os.path.join(os.path.dirname(files.vmPathName), item))
             for item in vm.layout.logFile:
-                facts['hw_files'].append(files.logDirectory + item)
+                facts['hw_files'].append(os.path.join(files.logDirectory, item))
             for item in vm.layout.disk:
                 for disk in item.diskFile:
                     facts['hw_files'].append(disk)
-    except BaseException:
+    except Exception:
         pass
 
     facts['hw_folder'] = PyVmomi.get_vm_path(content, vm)
@@ -774,11 +790,12 @@ class PyVmomi(object):
         Constructor
         """
         if not HAS_REQUESTS:
-            self.module.fail_json(msg="Unable to find 'requests' Python library which is required."
-                                      " Please install using 'pip install requests'")
+            module.fail_json(msg=missing_required_lib('requests'),
+                             exception=REQUESTS_IMP_ERR)
 
         if not HAS_PYVMOMI:
-            module.fail_json(msg='PyVmomi Python module required. Install using "pip install PyVmomi"')
+            module.fail_json(msg=missing_required_lib('PyVmomi'),
+                             exception=PYVMOMI_IMP_ERR)
 
         self.module = module
         self.params = module.params
@@ -861,9 +878,12 @@ class PyVmomi(object):
         vm_obj = None
         user_desired_path = None
 
-        if self.params['uuid']:
+        if self.params['uuid'] and not self.params['use_instance_uuid']:
             vm_obj = find_vm_by_id(self.content, vm_id=self.params['uuid'], vm_id_type="uuid")
-
+        elif self.params['uuid'] and self.params['use_instance_uuid']:
+            vm_obj = find_vm_by_id(self.content,
+                                   vm_id=self.params['uuid'],
+                                   vm_id_type="instance_uuid")
         elif self.params['name']:
             objects = self.get_managed_objects_properties(vim_type=vim.VirtualMachine, properties=['name'])
             vms = []
@@ -968,7 +988,7 @@ class PyVmomi(object):
                 folder_name = fp.name + '/' + folder_name
                 try:
                     fp = fp.parent
-                except BaseException:
+                except Exception:
                     break
             folder_name = '/' + folder_name
         return folder_name
@@ -1093,6 +1113,28 @@ class PyVmomi(object):
 
         return host_obj_list
 
+    def host_version_at_least(self, version=None, vm_obj=None, host_name=None):
+        """
+        Check that the ESXi Host is at least a specific version number
+        Args:
+            vm_obj: virtual machine object, required one of vm_obj, host_name
+            host_name (string): ESXi host name
+            version (tuple): a version tuple, for example (6, 7, 0)
+        Returns: bool
+        """
+        if vm_obj:
+            host_system = vm_obj.summary.runtime.host
+        elif host_name:
+            host_system = self.find_hostsystem_by_name(host_name=host_name)
+        else:
+            self.module.fail_json(msg='VM object or ESXi host name must be set one.')
+        if host_system and version:
+            host_version = host_system.summary.config.product.version
+            return StrictVersion(host_version) >= StrictVersion('.'.join(map(str, version)))
+        else:
+            self.module.fail_json(msg='Unable to get the ESXi host from vm: %s, or hostname %s,'
+                                      'or the passed ESXi version: %s is None.' % (vm_obj, host_name, version))
+
     # Network related functions
     @staticmethod
     def find_host_portgroup_by_name(host, portgroup_name):
@@ -1162,3 +1204,179 @@ class PyVmomi(object):
             if dsc.name == datastore_cluster_name:
                 return dsc
         return None
+
+    # VMDK stuff
+    def vmdk_disk_path_split(self, vmdk_path):
+        """
+        Takes a string in the format
+
+            [datastore_name] path/to/vm_name.vmdk
+
+        Returns a tuple with multiple strings:
+
+        1. datastore_name: The name of the datastore (without brackets)
+        2. vmdk_fullpath: The "path/to/vm_name.vmdk" portion
+        3. vmdk_filename: The "vm_name.vmdk" portion of the string (os.path.basename equivalent)
+        4. vmdk_folder: The "path/to/" portion of the string (os.path.dirname equivalent)
+        """
+        try:
+            datastore_name = re.match(r'^\[(.*?)\]', vmdk_path, re.DOTALL).groups()[0]
+            vmdk_fullpath = re.match(r'\[.*?\] (.*)$', vmdk_path).groups()[0]
+            vmdk_filename = os.path.basename(vmdk_fullpath)
+            vmdk_folder = os.path.dirname(vmdk_fullpath)
+            return datastore_name, vmdk_fullpath, vmdk_filename, vmdk_folder
+        except (IndexError, AttributeError) as e:
+            self.module.fail_json(msg="Bad path '%s' for filename disk vmdk image: %s" % (vmdk_path, to_native(e)))
+
+    def find_vmdk_file(self, datastore_obj, vmdk_fullpath, vmdk_filename, vmdk_folder):
+        """
+        Return vSphere file object or fail_json
+        Args:
+            datastore_obj: Managed object of datastore
+            vmdk_fullpath: Path of VMDK file e.g., path/to/vm/vmdk_filename.vmdk
+            vmdk_filename: Name of vmdk e.g., VM0001_1.vmdk
+            vmdk_folder: Base dir of VMDK e.g, path/to/vm
+
+        """
+
+        browser = datastore_obj.browser
+        datastore_name = datastore_obj.name
+        datastore_name_sq = "[" + datastore_name + "]"
+        if browser is None:
+            self.module.fail_json(msg="Unable to access browser for datastore %s" % datastore_name)
+
+        detail_query = vim.host.DatastoreBrowser.FileInfo.Details(
+            fileOwner=True,
+            fileSize=True,
+            fileType=True,
+            modification=True
+        )
+        search_spec = vim.host.DatastoreBrowser.SearchSpec(
+            details=detail_query,
+            matchPattern=[vmdk_filename],
+            searchCaseInsensitive=True,
+        )
+        search_res = browser.SearchSubFolders(
+            datastorePath=datastore_name_sq,
+            searchSpec=search_spec
+        )
+
+        changed = False
+        vmdk_path = datastore_name_sq + " " + vmdk_fullpath
+        try:
+            changed, result = wait_for_task(search_res)
+        except TaskError as task_e:
+            self.module.fail_json(msg=to_native(task_e))
+
+        if not changed:
+            self.module.fail_json(msg="No valid disk vmdk image found for path %s" % vmdk_path)
+
+        target_folder_path = datastore_name_sq + " " + vmdk_folder + '/'
+
+        for file_result in search_res.info.result:
+            for f in getattr(file_result, 'file'):
+                if f.path == vmdk_filename and file_result.folderPath == target_folder_path:
+                    return f
+
+        self.module.fail_json(msg="No vmdk file found for path specified [%s]" % vmdk_path)
+
+    #
+    # Conversion to JSON
+    #
+
+    def _deepmerge(self, d, u):
+        """
+        Deep merges u into d.
+
+        Credit:
+          https://bit.ly/2EDOs1B (stackoverflow question 3232943)
+        License:
+          cc-by-sa 3.0 (https://creativecommons.org/licenses/by-sa/3.0/)
+        Changes:
+          using collections_compat for compatibility
+
+        Args:
+          - d (dict): dict to merge into
+          - u (dict): dict to merge into d
+
+        Returns:
+          dict, with u merged into d
+        """
+        for k, v in iteritems(u):
+            if isinstance(v, collections_compat.Mapping):
+                d[k] = self._deepmerge(d.get(k, {}), v)
+            else:
+                d[k] = v
+        return d
+
+    def _extract(self, data, remainder):
+        """
+        This is used to break down dotted properties for extraction.
+
+        Args:
+          - data (dict): result of _jsonify on a property
+          - remainder: the remainder of the dotted property to select
+
+        Return:
+          dict
+        """
+        result = dict()
+        if '.' not in remainder:
+            result[remainder] = data[remainder]
+            return result
+        key, remainder = remainder.split('.', 1)
+        result[key] = self._extract(data[key], remainder)
+        return result
+
+    def _jsonify(self, obj):
+        """
+        Convert an object from pyVmomi into JSON.
+
+        Args:
+          - obj (object): vim object
+
+        Return:
+          dict
+        """
+        return json.loads(json.dumps(obj, cls=VmomiSupport.VmomiJSONEncoder,
+                                     sort_keys=True, strip_dynamic=True))
+
+    def to_json(self, obj, properties=None):
+        """
+        Convert a vSphere (pyVmomi) Object into JSON.  This is a deep
+        transformation.  The list of properties is optional - if not
+        provided then all properties are deeply converted.  The resulting
+        JSON is sorted to improve human readability.
+
+        Requires upstream support from pyVmomi > 6.7.1
+        (https://github.com/vmware/pyvmomi/pull/732)
+
+        Args:
+          - obj (object): vim object
+          - properties (list, optional): list of properties following
+                the property collector specification, for example:
+                ["config.hardware.memoryMB", "name", "overallStatus"]
+                default is a complete object dump, which can be large
+
+        Return:
+          dict
+        """
+        if not HAS_PYVMOMIJSON:
+            self.module.fail_json(msg='The installed version of pyvmomi lacks JSON output support; need pyvmomi>6.7.1')
+
+        result = dict()
+        if properties:
+            for prop in properties:
+                try:
+                    if '.' in prop:
+                        key, remainder = prop.split('.', 1)
+                        tmp = dict()
+                        tmp[key] = self._extract(self._jsonify(getattr(obj, key)), remainder)
+                        self._deepmerge(result, tmp)
+                    else:
+                        result[prop] = self._jsonify(getattr(obj, prop))
+                except (AttributeError, KeyError):
+                    self.module.fail_json(msg="Property '{0}' not found.".format(prop))
+        else:
+            result = self._jsonify(obj)
+        return result

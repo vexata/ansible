@@ -96,28 +96,31 @@ EXAMPLES = r'''
   bigip_monitor_tcp_half_open:
     state: present
     ip: 10.10.10.10
-    server: lb.mydomain.com
-    user: admin
-    password: secret
     name: my_tcp_monitor
+    provider:
+      server: lb.mydomain.com
+      user: admin
+      password: secret
   delegate_to: localhost
 
 - name: Remove TCP half-open Monitor
   bigip_monitor_tcp_half_open:
     state: absent
-    server: lb.mydomain.com
-    user: admin
-    password: secret
     name: my_tcp_monitor
+    provider:
+      server: lb.mydomain.com
+      user: admin
+      password: secret
   delegate_to: localhost
 
 - name: Add half-open monitor for all addresses, port 514
   bigip_monitor_tcp_half_open:
-    server: lb.mydomain.com
-    user: admin
     port: 514
-    password: secret
     name: my_tcp_monitor
+    provider:
+      password: secret
+      server: lb.mydomain.com
+      user: admin
   delegate_to: localhost
 '''
 
@@ -125,7 +128,7 @@ RETURN = r'''
 parent:
   description: New parent template of the monitor.
   returned: changed
-  type: string
+  type: str
   sample: tcp
 description:
   description: The description of the monitor.
@@ -135,7 +138,7 @@ description:
 ip:
   description: The new IP of IP/port definition.
   returned: changed
-  type: string
+  type: str
   sample: 10.12.13.14
 interval:
   description: The new interval in which to run the monitor check.

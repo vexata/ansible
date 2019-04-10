@@ -1406,7 +1406,7 @@ class VmsModule(BaseModule):
             disk_service = disks_service.disk_service(da.disk.id)
             wait(
                 service=disk_service,
-                condition=lambda disk: disk.status == otypes.DiskStatus.OK,
+                condition=lambda disk: disk.status == otypes.DiskStatus.OK if disk.storage_type == otypes.DiskStorageType.IMAGE else True,
                 wait=self.param('wait'),
                 timeout=self.param('timeout'),
             )
@@ -2087,6 +2087,7 @@ def main():
             if module.params['xen'] or module.params['kvm'] or module.params['vmware']:
                 vms_module.changed = import_vm(module, connection)
 
+            # In case of wait=false and state=running, waits for VM to be created
             # In case VM don't exist, wait for VM DOWN state,
             # otherwise don't wait for any state, just update VM:
             ret = vms_module.create(
@@ -2095,6 +2096,7 @@ def main():
                 update_params={'next_run': module.params['next_run']} if module.params['next_run'] is not None else None,
                 clone=module.params['clone'],
                 clone_permissions=module.params['clone_permissions'],
+                _wait=True if not module.params['wait'] and state == 'running' else module.params['wait'],
             )
             # If VM is going to be created and check_mode is on, return now:
             if module.check_mode and ret.get('id') is None:

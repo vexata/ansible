@@ -125,10 +125,11 @@ EXAMPLES = r'''
 - name: Create a OneConnect profile
   bigip_profile_oneconnect:
     name: foo
-    password: secret
-    server: lb.mydomain.com
     state: present
-    user: admin
+    provider:
+      user: admin
+      password: secret
+      server: lb.mydomain.com
   delegate_to: localhost
 '''
 
@@ -136,12 +137,12 @@ RETURN = r'''
 source_mask:
   description: Value that the system applies to the source address to determine its eligibility for reuse.
   returned: changed
-  type: string
+  type: str
   sample: 255.255.255.255
 description:
   description: Description of the profile.
   returned: changed
-  type: string
+  type: str
   sample: My profile
 maximum_size:
   description: Maximum number of connections that the system holds in the connection reuse pool.
@@ -161,12 +162,12 @@ maximum_reuse:
 idle_timeout_override:
   description: The new idle timeout override.
   returned: changed
-  type: string
+  type: str
   sample: disabled
 limit_type:
   description: New limit type of the profile.
   returned: changed
-  type: string
+  type: str
   sample: idle
 share_pools:
   description: Share connections among similar virtual servers.
@@ -499,7 +500,7 @@ class ModuleManager(object):
         except ValueError as ex:
             raise F5ModuleError(str(ex))
 
-        if 'code' in response and response['code'] in [400, 403]:
+        if 'code' in response and response['code'] in [400, 403, 404]:
             if 'message' in response:
                 raise F5ModuleError(response['message'])
             else:
@@ -519,7 +520,7 @@ class ModuleManager(object):
         except ValueError as ex:
             raise F5ModuleError(str(ex))
 
-        if 'code' in response and response['code'] == 400:
+        if 'code' in response and response['code'] in [400, 404]:
             if 'message' in response:
                 raise F5ModuleError(response['message'])
             else:

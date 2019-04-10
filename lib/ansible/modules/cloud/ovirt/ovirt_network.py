@@ -184,8 +184,8 @@ class NetworksModule(BaseModule):
         if self.param('label') is None:
             return
 
-        labels = [lbl.id for lbl in self._connection.follow_link(entity.network_labels)]
         labels_service = self._service.service(entity.id).network_labels_service()
+        labels = [lbl.id for lbl in labels_service.list()]
         if not self.param('label') in labels:
             if not self._module.check_mode:
                 if labels:
@@ -241,18 +241,18 @@ class ClusterNetworksModule(BaseModule):
         return (
             equal(self._cluster_network.get('required'), entity.required) and
             equal(self._cluster_network.get('display'), entity.display) and
-            equal(
-                sorted([
-                    usage
-                    for usage in ['display', 'gluster', 'migration']
-                    if self._cluster_network.get(usage, False)
-                ]),
-                sorted([
+            all(
+                x in [
                     str(usage)
                     for usage in getattr(entity, 'usages', [])
                     # VM + MANAGEMENT is part of root network
                     if usage != otypes.NetworkUsage.VM and usage != otypes.NetworkUsage.MANAGEMENT
-                ]),
+                ]
+                for x in [
+                    usage
+                    for usage in ['display', 'gluster', 'migration']
+                    if self._cluster_network.get(usage, False)
+                ]
             )
         )
 

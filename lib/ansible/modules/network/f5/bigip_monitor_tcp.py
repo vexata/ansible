@@ -101,21 +101,23 @@ EXAMPLES = r'''
 - name: Create TCP Monitor
   bigip_monitor_tcp:
     state: present
-    server: lb.mydomain.com
-    user: admin
-    password: secret
     name: my_tcp_monitor
     send: tcp string to send
     receive: tcp string to receive
+    provider:
+      server: lb.mydomain.com
+      user: admin
+      password: secret
   delegate_to: localhost
 
 - name: Remove TCP Monitor
   bigip_monitor_tcp:
     state: absent
-    server: lb.mydomain.com
-    user: admin
-    password: secret
     name: my_tcp_monitor
+    provider:
+      server: lb.mydomain.com
+      user: admin
+      password: secret
   delegate_to: localhost
 '''
 
@@ -123,12 +125,12 @@ RETURN = r'''
 parent:
   description: New parent template of the monitor.
   returned: changed
-  type: string
+  type: str
   sample: tcp
 send:
   description: The new send string for this monitor.
   returned: changed
-  type: string
+  type: str
   sample: tcp string to send
 description:
   description: The description of the monitor.
@@ -138,17 +140,17 @@ description:
 receive:
   description: The new receive string for this monitor.
   returned: changed
-  type: string
+  type: str
   sample: tcp string to receive
 ip:
   description: The new IP of IP/port definition.
   returned: changed
-  type: string
+  type: str
   sample: 10.12.13.14
 port:
   description: The new port of IP/port definition.
   returned: changed
-  type: string
+  type: str
   sample: admin@root.local
 interval:
   description: The new interval in which to run the monitor check.

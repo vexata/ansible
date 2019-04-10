@@ -55,10 +55,11 @@ EXAMPLES = r'''
     destinations:
       - hsl1
       - security-log-servers-logging
-    password: secret
-    server: lb.mydomain.com
     state: present
-    user: admin
+    provider:
+      user: admin
+      password: secret
+      server: lb.mydomain.com
   delegate_to: localhost
 '''
 
@@ -66,7 +67,7 @@ RETURN = r'''
 description:
   description: The new description of the resource.
   returned: changed
-  type: string
+  type: str
   sample: "Security log publisher"
 destinations:
   description: The new list of destinations for the resource.

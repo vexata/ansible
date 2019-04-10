@@ -126,6 +126,10 @@ EXAMPLES = r'''
   bigip_policy:
     name: Policy-Foo
     state: present
+    provider:
+      server: lb.mydomain.com
+      user: admin
+      password: secret
   delegate_to: localhost
 
 - name: Add a rule to the new policy
@@ -138,6 +142,10 @@ EXAMPLES = r'''
     actions:
       - type: forward
         pool: pool-svrs
+    provider:
+      server: lb.mydomain.com
+      user: admin
+      password: secret
   delegate_to: localhost
 
 - name: Add multiple rules to the new policy
@@ -146,6 +154,10 @@ EXAMPLES = r'''
     name: "{{ item.name }}"
     conditions: "{{ item.conditions }}"
     actions: "{{ item.actions }}"
+    provider:
+      server: lb.mydomain.com
+      user: admin
+      password: secret
   delegate_to: localhost
   loop:
     - name: rule1
@@ -171,6 +183,10 @@ EXAMPLES = r'''
       - type: all_traffic
     actions:
       - type: ignore
+    provider:
+      server: lb.mydomain.com
+      user: admin
+      password: secret
   delegate_to: localhost
 '''
 
@@ -183,12 +199,12 @@ actions:
     type:
       description: The action type
       returned: changed
-      type: string
+      type: str
       sample: forward
     pool:
       description: Pool for forward to
       returned: changed
-      type: string
+      type: str
       sample: foo-pool
   sample: hash/dictionary of values
 conditions:
@@ -199,7 +215,7 @@ conditions:
     type:
       description: The condition type.
       returned: changed
-      type: string
+      type: str
       sample: http_uri
     path_begins_with_any:
       description: List of strings that the URI begins with.
@@ -210,7 +226,7 @@ conditions:
 description:
   description: The new description of the rule.
   returned: changed
-  type: string
+  type: str
   sample: My rule
 '''
 

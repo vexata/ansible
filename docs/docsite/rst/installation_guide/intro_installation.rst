@@ -36,12 +36,12 @@ For other installation options, we recommend installing via "pip", which is the 
 If you wish to track the development release to use and test the latest features, we will share
 information about running from source.  It's not necessary to install the program to run from source.
 
-.. _control_machine_requirements:
+.. _control_node_requirements:
 
-Control Machine Requirements
+Control Node Requirements
 ````````````````````````````
 
-Currently Ansible can be run from any machine with Python 2 (version 2.7) or Python 3 (versions 3.5 and higher) installed. Windows isn't supported for the control machine.
+Currently Ansible can be run from any machine with Python 2 (version 2.7) or Python 3 (versions 3.5 and higher) installed. Windows isn't supported for the control node.
 
 This includes Red Hat, Debian, CentOS, macOS, any of the BSDs, and so on.
 
@@ -90,11 +90,11 @@ later).
 
      .. code-block:: shell
 
-        $ ansible myhost --sudo -m raw -a "yum install -y python2"
+        $ ansible myhost --become -m raw -a "yum install -y python2"
 
-.. _installing_the_control_machine:
+.. _installing_the_control_node:
 
-Installing the Control Machine
+Installing the Control Node
 ``````````````````````````````
 .. _from_yum:
 
@@ -145,12 +145,12 @@ To configure the PPA on your machine and install ansible run these commands:
 
 .. code-block:: bash
 
-    $ sudo apt-get update
-    $ sudo apt-get install software-properties-common
+    $ sudo apt update
+    $ sudo apt install software-properties-common
     $ sudo apt-add-repository --yes --update ppa:ansible/ansible
-    $ sudo apt-get install ansible
+    $ sudo apt install ansible
 
-.. note:: On older Ubuntu distributions, "software-properties-common" is called "python-software-properties".
+.. note:: On older Ubuntu distributions, "software-properties-common" is called "python-software-properties". You may want to use ``apt-get`` instead of ``apt`` in older versions.
 
 Debian/Ubuntu packages can also be built from the source checkout, run:
 
@@ -176,10 +176,10 @@ Then run these commands:
 .. code-block:: bash
 
     $ sudo apt-key adv --keyserver keyserver.ubuntu.com --recv-keys 93C4A3FD7BB9C367
-    $ sudo apt-get update
-    $ sudo apt-get install ansible
+    $ sudo apt update
+    $ sudo apt install ansible
 
-.. note:: This method has been verified with the Trusty sources in Debian Jessie and Stretch but may not be supported in earlier versions.
+.. note:: This method has been verified with the Trusty sources in Debian Jessie and Stretch but may not be supported in earlier versions. You may want to use ``apt-get`` instead of ``apt`` in older versions.
 
 Latest Releases via Portage (Gentoo)
 ++++++++++++++++++++++++++++++++++++
@@ -255,7 +255,7 @@ Ansible is available in the Community repository::
 
     $ pacman -S ansible
 
-The AUR has a PKGBUILD for pulling directly from Github called `ansible-git <https://aur.archlinux.org/packages/ansible-git>`_.
+The AUR has a PKGBUILD for pulling directly from GitHub called `ansible-git <https://aur.archlinux.org/packages/ansible-git>`_.
 
 Also see the `Ansible <https://wiki.archlinux.org/index.php/Ansible>`_ page on the ArchWiki.
 
@@ -274,6 +274,19 @@ Create queue with Ansible and all dependencies::
 Build and install packages from created queuefile (answer Q for question if sbopkg should use queue or package)::
 
     # sbopkg -k -i ansible
+
+.. _from swupd:
+
+Latest Release via swupd (Clear Linux)
++++++++++++++++++++++++++++++++++++++++
+
+Ansible and its dependencies are available as part of the sysadmin host management bundle::
+
+    $ sudo swupd bundle-add sysadmin-hostmgmt
+
+Update of the software will be managed by the swupd tool::
+
+   $ sudo swupd update
 
 .. _from_pip:
 
@@ -332,7 +345,7 @@ open source projects.
 
 .. note::
 
-   If you are intending to use Tower as the Control Machine, do not use a source install. Please use OS package manager (like ``apt/yum``) or ``pip`` to install a stable version.
+   If you are intending to use Tower as the Control Node, do not use a source install. Please use OS package manager (like ``apt/yum``) or ``pip`` to install a stable version.
 
 
 To install from source, clone the Ansible git repository:

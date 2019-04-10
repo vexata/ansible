@@ -303,8 +303,7 @@
     state: removed
   register: yum_result
 
-# Test download_only
-- name: install sos
+- name: Test download_only
   yum:
     name: sos
     state: latest
@@ -328,6 +327,33 @@
     that:
         - "yum_result is success"
         - "not yum_result is changed"
+
+- name: uninstall sos for downloadonly/downloaddir test
+  yum:
+    name: sos
+    state: absent
+
+- name: Test download_only/download_dir
+  yum:
+    name: sos
+    state: latest
+    download_only: true
+    download_dir: "/var/tmp/packages"
+  register: yum_result
+
+- name: verify yum output
+  assert:
+    that:
+        - "yum_result is success"
+        - "yum_result is changed"
+
+- command: "ls /var/tmp/packages"
+  register: ls_out
+
+- name: Verify specified download_dir was used
+  assert:
+    that:
+      - "'sos' in ls_out.stdout"
 
 - name: install group
   yum:
@@ -631,16 +657,6 @@
   with_items: "{{ yum_version.results }}"
 
 - block:
-  - name: check whether yum supports disableexcludes (>= 3.4)
-    set_fact:
-      supports_disable_excludes: "{{ yum_version is version_compare('3.4.0', '>=') }}"
-    when: ansible_pkg_mgr == "yum"
-
-  - name: unset disableexcludes tests for dnf(yum4) backend temporarily
-    set_fact:
-      supports_disable_excludes: True
-    when: ansible_pkg_mgr == "dnf"
-
   - name: uninstall bc
     yum: name=bc state=removed
 
@@ -675,18 +691,15 @@
     yum: name=bc state=latest
     register: yum_bc_result
     ignore_errors: True
-    when: supports_disable_excludes
 
   - name: verify bc did not install because it is in exclude list
     assert:
       that:
         - "yum_bc_result is failed"
-    when: supports_disable_excludes
 
   - name: install bc with disable_excludes
     yum: name=bc state=latest disable_excludes=all
     register: yum_bc_result_using_excludes
-    when: supports_disable_excludes
 
   - name: verify bc did install using disable_excludes=all
     assert:
@@ -694,7 +707,6 @@
         - "yum_bc_result_using_excludes is success"
         - "yum_bc_result_using_excludes is changed"
         - "yum_bc_result_using_excludes is not failed"
-    when: supports_disable_excludes
 
   - name: remove exclude bc (cleanup yum.conf)
     lineinfile:
@@ -702,7 +714,7 @@
       regexp: (^exclude=bc*)
       line: "exclude="
       state: present
-    when: supports_disable_excludes and (ansible_pkg_mgr == 'yum')
+    when: ansible_pkg_mgr == 'yum'
 
   - name: remove exclude bc (cleanup dnf.conf)
     lineinfile:
@@ -711,48 +723,6 @@
       line: "excludepkgs="
       state: present
     when: ansible_pkg_mgr == 'dnf'
-  # end test case where disable_excludes is supported
-
-  # begin test case where disable_excludes is not supported
-  - name: Try install bc with disable_excludes
-    yum: name=bc state=latest disable_excludes=all
-    register: yum_fail_bc_result_old_yum
-    ignore_errors: True
-    when: not supports_disable_excludes
-
-  - name: verify packages did not install because yum version is unsupported
-    assert:
-      that:
-        - "yum_fail_bc_result_old_yum is failed"
-    when: not supports_disable_excludes
-
-  - name: verify yum module outputs
-    assert:
-      that:
-          - "'is available in yum version 3.4 and onwards.' in yum_fail_bc_result_old_yum.msg"
-    when: not supports_disable_excludes
-
-  - name: remove exclude bc (cleanup yum.conf)
-    lineinfile:
-      dest: /etc/yum.conf
-      regexp: (^exclude=bc*)
-      line: "exclude="
-      state: present
-    when: not supports_disable_excludes and ansible_pkg_mgr == 'yum'
-
-  - name: install bc (bring test env in same state as when testing started)
-    yum: name=bc state=latest
-    register: yum_bc_result_old_yum
-    when: not supports_disable_excludes
-
-  - name: verify bc installed
-    assert:
-      that:
-        - "yum_bc_result_old_yum is success"
-        - "yum_bc_result_old_yum is changed"
-        - "yum_bc_result_old_yum is not failed"
-    when: not supports_disable_excludes and ansible_pkg_mgr == "yum"
-  # end test case where disable_excludes is not supported
 
   # Fedora < 26 has a bug in dnf where package excludes in dnf.conf aren't
   # actually honored and those releases are EOL'd so we have no expectation they

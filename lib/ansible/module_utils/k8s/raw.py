@@ -23,11 +23,15 @@ from datetime import datetime
 from distutils.version import LooseVersion
 import time
 import sys
+import traceback
 
+from ansible.module_utils.basic import missing_required_lib
 from ansible.module_utils.k8s.common import AUTH_ARG_SPEC, COMMON_ARG_SPEC
 from ansible.module_utils.six import string_types
 from ansible.module_utils.k8s.common import KubernetesAnsibleModule
 from ansible.module_utils.common.dict_transformations import dict_merge
+
+from distutils.version import LooseVersion
 
 
 try:
@@ -42,6 +46,14 @@ try:
     HAS_KUBERNETES_VALIDATE = True
 except ImportError:
     HAS_KUBERNETES_VALIDATE = False
+
+K8S_CONFIG_HASH_IMP_ERR = None
+try:
+    from openshift.helper.hashes import generate_hash
+    HAS_K8S_CONFIG_HASH = True
+except ImportError:
+    K8S_CONFIG_HASH_IMP_ERR = traceback.format_exc()
+    HAS_K8S_CONFIG_HASH = False
 
 
 class KubernetesRawModule(KubernetesAnsibleModule):
@@ -62,10 +74,12 @@ class KubernetesRawModule(KubernetesAnsibleModule):
         argument_spec['wait'] = dict(type='bool', default=False)
         argument_spec['wait_timeout'] = dict(type='int', default=120)
         argument_spec['validate'] = dict(type='dict', default=None, options=self.validate_spec)
+        argument_spec['append_hash'] = dict(type='bool', default=False)
         return argument_spec
 
-    def __init__(self, *args, **kwargs):
+    def __init__(self, k8s_kind=None, *args, **kwargs):
         self.client = None
+        self.warnings = []
 
         mutually_exclusive = [
             ('resource_definition', 'src'),
@@ -75,17 +89,23 @@ class KubernetesRawModule(KubernetesAnsibleModule):
                                          mutually_exclusive=mutually_exclusive,
                                          supports_check_mode=True,
                                          **kwargs)
-        self.kind = self.params.get('kind')
+        self.kind = k8s_kind or self.params.get('kind')
         self.api_version = self.params.get('api_version')
         self.name = self.params.get('name')
         self.namespace = self.params.get('namespace')
         resource_definition = self.params.get('resource_definition')
-        if self.params['validate']:
+        validate = self.params.get('validate')
+        if validate:
             if LooseVersion(self.openshift_version) < LooseVersion("0.8.0"):
                 self.fail_json(msg="openshift >= 0.8.0 is required for validate")
+        self.append_hash = self.params.get('append_hash')
+        if self.append_hash:
+            if not HAS_K8S_CONFIG_HASH:
+                self.fail_json(msg=missing_required_lib("openshift >= 0.7.2", reason="for append_hash"),
+                               exception=K8S_CONFIG_HASH_IMP_ERR)
         if self.params['merge_type']:
             if LooseVersion(self.openshift_version) < LooseVersion("0.6.2"):
-                self.fail_json(msg="openshift >= 0.6.2 is required for merge_type")
+                self.fail_json(msg=missing_required_lib("openshift >= 0.6.2", reason="for merge_type"))
         if resource_definition:
             if isinstance(resource_definition, string_types):
                 try:
@@ -96,7 +116,7 @@ class KubernetesRawModule(KubernetesAnsibleModule):
                 self.resource_definitions = resource_definition
             else:
                 self.resource_definitions = [resource_definition]
-        src = self.params.pop('src')
+        src = self.params.get('src')
         if src:
             self.resource_definitions = self.load_resource_definitions(src)
 
@@ -110,17 +130,34 @@ class KubernetesRawModule(KubernetesAnsibleModule):
                 }
             }]
 
+    def flatten_list_kind(self, list_resource, definitions):
+        flattened = []
+        parent_api_version = list_resource.group_version if list_resource else None
+        parent_kind = list_resource.kind[:-4] if list_resource else None
+        for definition in definitions.get('items', []):
+            resource = self.find_resource(definition.get('kind', parent_kind), definition.get('apiVersion', parent_api_version), fail=True)
+            flattened.append((resource, self.set_defaults(resource, definition)))
+        return flattened
+
     def execute_module(self):
         changed = False
         results = []
         self.client = self.get_api_client()
+
+        flattened_definitions = []
         for definition in self.resource_definitions:
             kind = definition.get('kind', self.kind)
-            search_kind = kind
-            if kind.lower().endswith('list'):
-                search_kind = kind[:-4]
             api_version = definition.get('apiVersion', self.api_version)
-            resource = self.find_resource(search_kind, api_version, fail=True)
+            if kind.endswith('List'):
+                resource = self.find_resource(kind, api_version, fail=False)
+                flattened_definitions.extend(self.flatten_list_kind(resource, definition))
+            else:
+                resource = self.find_resource(kind, api_version, fail=True)
+                flattened_definitions.append((resource, definition))
+
+        for (resource, definition) in flattened_definitions:
+            kind = definition.get('kind', self.kind)
+            api_version = definition.get('apiVersion', self.api_version)
             definition = self.set_defaults(resource, definition)
             self.warnings = []
             if self.params['validate'] is not None:
@@ -141,25 +178,28 @@ class KubernetesRawModule(KubernetesAnsibleModule):
         })
 
     def validate(self, resource):
+        def _prepend_resource_info(resource, msg):
+            return "%s %s: %s" % (resource['kind'], resource['metadata']['name'], msg)
+
         try:
             warnings, errors = self.client.validate(resource, self.params['validate'].get('version'), self.params['validate'].get('strict'))
         except KubernetesValidateMissing:
             self.fail_json(msg="kubernetes-validate python library is required to validate resources")
 
         if errors and self.params['validate']['fail_on_error']:
-            self.fail_json(msg="\n".join(errors))
+            self.fail_json(msg="\n".join([_prepend_resource_info(resource, error) for error in errors]))
         else:
-            return warnings + errors
+            return [_prepend_resource_info(resource, msg) for msg in warnings + errors]
 
     def set_defaults(self, resource, definition):
         definition['kind'] = resource.kind
         definition['apiVersion'] = resource.group_version
-        if not definition.get('metadata'):
-            definition['metadata'] = {}
-        if self.name and not definition['metadata'].get('name'):
-            definition['metadata']['name'] = self.name
-        if resource.namespaced and self.namespace and not definition['metadata'].get('namespace'):
-            definition['metadata']['namespace'] = self.namespace
+        metadata = definition.get('metadata', {})
+        if self.name and not metadata.get('name'):
+            metadata['name'] = self.name
+        if resource.namespaced and self.namespace and not metadata.get('namespace'):
+            metadata['namespace'] = self.namespace
+        definition['metadata'] = metadata
         return definition
 
     def perform_action(self, resource, definition):
@@ -169,19 +209,18 @@ class KubernetesRawModule(KubernetesAnsibleModule):
         name = definition['metadata'].get('name')
         namespace = definition['metadata'].get('namespace')
         existing = None
-        wait = self.params['wait']
-        wait_timeout = self.params['wait_timeout']
+        wait = self.params.get('wait')
+        wait_timeout = self.params.get('wait_timeout')
 
         self.remove_aliases()
 
-        if definition['kind'].endswith('List'):
-            result['result'] = resource.get(namespace=namespace).to_dict()
-            result['changed'] = False
-            result['method'] = 'get'
-            return result
-
         try:
-            existing = resource.get(name=name, namespace=namespace)
+            # ignore append_hash for resources other than ConfigMap and Secret
+            if self.append_hash and definition['kind'] in ['ConfigMap', 'Secret']:
+                name = '%s-%s' % (name, generate_hash(definition))
+                definition['metadata']['name'] = name
+            params = dict(name=name, namespace=namespace)
+            existing = resource.get(**params)
         except NotFoundError:
             # Remove traceback so that it doesn't show up in later failures
             try:
@@ -205,19 +244,19 @@ class KubernetesRawModule(KubernetesAnsibleModule):
                 return result
             else:
                 # Delete the object
+                result['changed'] = True
                 if not self.check_mode:
                     try:
-                        k8s_obj = resource.delete(name, namespace=namespace)
+                        k8s_obj = resource.delete(**params)
                         result['result'] = k8s_obj.to_dict()
                     except DynamicApiError as exc:
                         self.fail_json(msg="Failed to delete object: {0}".format(exc.body),
                                        error=exc.status, status=exc.status, reason=exc.reason)
-                result['changed'] = True
-                if wait:
-                    success, resource, duration = self.wait(resource, definition, wait_timeout, 'absent')
-                    result['duration'] = duration
-                    if not success:
-                        self.fail_json(msg="Resource deletion timed out", **result)
+                    if wait:
+                        success, resource, duration = self.wait(resource, definition, wait_timeout, 'absent')
+                        result['duration'] = duration
+                        if not success:
+                            self.fail_json(msg="Resource deletion timed out", **result)
                 return result
         else:
             if not existing:
@@ -240,7 +279,7 @@ class KubernetesRawModule(KubernetesAnsibleModule):
                         self.fail_json(msg=msg, error=exc.status, status=exc.status, reason=exc.reason)
                 success = True
                 result['result'] = k8s_obj
-                if wait:
+                if wait and not self.check_mode:
                     success, result['result'], result['duration'] = self.wait(resource, definition, wait_timeout)
                 result['changed'] = True
                 result['method'] = 'create'
@@ -256,7 +295,7 @@ class KubernetesRawModule(KubernetesAnsibleModule):
                     k8s_obj = definition
                 else:
                     try:
-                        k8s_obj = resource.replace(definition, name=name, namespace=namespace).to_dict()
+                        k8s_obj = resource.replace(definition, name=name, namespace=namespace, append_hash=self.append_hash).to_dict()
                     except DynamicApiError as exc:
                         msg = "Failed to replace object: {0}".format(exc.body)
                         if self.warnings:
@@ -347,11 +386,14 @@ class KubernetesRawModule(KubernetesAnsibleModule):
             try:
                 response = resource.get(name=name, namespace=namespace)
                 if predicate(response):
-                    return True, response.to_dict(), _wait_for_elapsed()
+                    if response:
+                        return True, response.to_dict(), _wait_for_elapsed()
+                    else:
+                        return True, {}, _wait_for_elapsed()
                 time.sleep(timeout // 20)
             except NotFoundError:
                 if state == 'absent':
-                    return True, response.to_dict(), _wait_for_elapsed()
+                    return True, {}, _wait_for_elapsed()
         if response:
             response = response.to_dict()
         return False, response, _wait_for_elapsed()
@@ -387,4 +429,4 @@ class KubernetesRawModule(KubernetesAnsibleModule):
             predicate = waiter.get(kind, lambda x: True)
         else:
             predicate = _resource_absent
-        return self._wait_for(resource, definition['metadata']['name'], definition['metadata']['namespace'], predicate, timeout, state)
+        return self._wait_for(resource, definition['metadata']['name'], definition['metadata'].get('namespace'), predicate, timeout, state)

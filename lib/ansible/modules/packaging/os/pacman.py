@@ -23,12 +23,12 @@ version_added: "1.0"
 author:
     - Indrajit Raychaudhuri (@indrajitr)
     - Aaron Bull Schaefer (@elasticdog) <aaron@elasticdog.com>
-    - Kevin Karsopawiro (@Afterburn)
     - Maxime de Roucy (@tchernomax)
 options:
     name:
         description:
             - Name or list of names of the package(s) or file(s) to install, upgrade, or remove.
+              Can't be used in combination with C(upgrade).
         aliases: [ package, pkg ]
 
     state:
@@ -81,6 +81,7 @@ options:
     upgrade:
         description:
             - Whether or not to upgrade the whole system.
+              Can't be used in combination with C(name).
         default: no
         type: bool
         version_added: "2.0"
@@ -419,6 +420,7 @@ def main():
             update_cache_extra_args=dict(type='str', default=''),
         ),
         required_one_of=[['name', 'update_cache', 'upgrade']],
+        mutually_exclusive=[['name', 'upgrade']],
         supports_check_mode=True,
     )
 
@@ -472,6 +474,8 @@ def main():
             install_packages(module, pacman_path, p['state'], pkgs, pkg_files)
         elif p['state'] == 'absent':
             remove_packages(module, pacman_path, pkgs)
+    else:
+        module.exit_json(changed=False, msg="No package specified to work on.")
 
 
 if __name__ == "__main__":

@@ -21,7 +21,7 @@ version_added: "2.2"
 short_description: Create SSL/TLS certificates with the ACME protocol
 description:
    - "Create and renew SSL/TLS certificates with a CA supporting the
-      L(ACME protocol,https://tools.ietf.org/html/draft-ietf-acme-acme-14),
+      L(ACME protocol,https://tools.ietf.org/html/draft-ietf-acme-acme-18),
       such as L(Let's Encrypt,https://letsencrypt.org/). The current
       implementation supports the C(http-01), C(dns-01) and C(tls-alpn-01)
       challenges."
@@ -36,7 +36,7 @@ description:
       the necessary certificate has to be created and served.
       It is I(not) the responsibility of this module to perform these steps."
    - "For details on how to fulfill these challenges, you might have to read through
-      L(the main ACME specification,https://tools.ietf.org/html/draft-ietf-acme-acme-14#section-8)
+      L(the main ACME specification,https://tools.ietf.org/html/draft-ietf-acme-acme-18#section-8)
       and the L(TLS-ALPN-01 specification,https://tools.ietf.org/html/draft-ietf-acme-tls-alpn-05#section-3).
       Also, consider the examples provided for this module."
 notes:
@@ -47,10 +47,31 @@ notes:
       option."
    - "This module was called C(letsencrypt) before Ansible 2.6. The usage
       did not change."
-   - "If you want to use the C(tls-alpn-01) challenge, you can use the
-      M(acme_challenge_cert_helper) module to prepare the challenge certificate."
-   - "You can use the M(certificate_complete_chain) module to find the root certificate
-      for the returned fullchain."
+seealso:
+  - name: The Let's Encrypt documentation
+    description: Documentation for the Let's Encrypt Certification Authority.
+                 Provides useful information for example on rate limits.
+    link: https://letsencrypt.org/docs/
+  - name: Automatic Certificate Management Environment (ACME)
+    description: The current draft specification of the ACME protocol.
+    link: https://tools.ietf.org/html/draft-ietf-acme-acme-18
+  - name: ACME TLS ALPN Challenge Extension
+    description: The current draft specification of the C(tls-alpn-01) challenge.
+    link: https://tools.ietf.org/html/draft-ietf-acme-tls-alpn-05
+  - module: acme_challenge_cert_helper
+    description: Helps preparing C(tls-alpn-01) challenges.
+  - module: openssl_privatekey
+    description: Can be used to create private keys (both for certificates and accounts).
+  - module: openssl_csr
+    description: Can be used to create a Certificate Signing Request (CSR).
+  - module: certificate_complete_chain
+    description: Allows to find the root certificate for the returned fullchain.
+  - module: acme_certificate_revoke
+    description: Allows to revoke certificates.
+  - module: acme_account
+    description: Allows to create, modify or delete an ACME account.
+  - module: acme_inspect
+    description: Allows to debug problems.
 extends_documentation_fragment:
   - acme
 options:
@@ -62,19 +83,21 @@ options:
          used the M(acme_account) module to specify more than one contact
          for your account, this module will update your account and restrict
          it to the (at most one) contact email address specified here."
+    type: str
   agreement:
     description:
       - "URI to a terms of service document you agree to when using the
          ACME v1 service at C(acme_directory)."
       - Default is latest gathered from C(acme_directory) URL.
       - This option will only be used when C(acme_version) is 1.
+    type: str
   terms_agreed:
     description:
       - "Boolean indicating whether you agree to the terms of service document."
       - "ACME servers can require this to be true."
       - This option will only be used when C(acme_version) is not 1.
     type: bool
-    default: 'no'
+    default: no
     version_added: "2.5"
   modify_account:
     description:
@@ -85,12 +108,13 @@ options:
          using an old key if you changed the account key with M(acme_account)."
       - "If set to C(no), C(terms_agreed) and C(account_email) are ignored."
     type: bool
-    default: 'yes'
+    default: yes
     version_added: "2.6"
   challenge:
     description: The challenge to be performed.
-    choices: [ 'http-01', 'dns-01', 'tls-alpn-01' ]
+    type: str
     default: 'http-01'
+    choices: [ 'http-01', 'dns-01', 'tls-alpn-01' ]
   csr:
     description:
       - "File containing the CSR for the new certificate."
@@ -102,6 +126,7 @@ options:
          account key. This is a bad idea from a security point of view, and
          the CA should not accept the CSR. The ACME server should return an
          error in this case."
+    type: path
     required: true
     aliases: ['src']
   data:
@@ -119,23 +144,27 @@ options:
          as it causes error messages to be come unusable, and C(data) does
          not contain any information which can be used without having
          access to the account key or which are not public anyway."
+    type: dict
   dest:
     description:
       - "The destination file for the certificate."
       - "Required if C(fullchain_dest) is not specified."
+    type: path
     aliases: ['cert']
   fullchain_dest:
     description:
       - "The destination file for the full chain (i.e. certificate followed
          by chain of intermediate certificates)."
       - "Required if C(dest) is not specified."
+    type: path
     version_added: 2.5
     aliases: ['fullchain']
   chain_dest:
     description:
       - If specified, the intermediate certificate will be written to this file.
-    aliases: ['chain']
+    type: path
     version_added: 2.5
+    aliases: ['chain']
   remaining_days:
     description:
       - "The number of days the certificate must have left being valid.
@@ -144,6 +173,7 @@ options:
          include C(challenge_data)."
       - "To make sure that the certificate is renewed in any case, you can
          use the C(force) option."
+    type: int
     default: 10
   deactivate_authzs:
     description:
@@ -154,7 +184,7 @@ options:
          without having to re-authenticate the domain. This can be a security
          concern."
     type: bool
-    default: 'no'
+    default: no
     version_added: 2.6
   force:
     description:
@@ -163,11 +193,11 @@ options:
       - This is especially helpful when having an updated CSR e.g. with
         additional domains for which a new certificate is desired.
     type: bool
-    default: 'no'
+    default: no
     version_added: 2.6
 '''
 
-EXAMPLES = R'''
+EXAMPLES = r'''
 ### Example with HTTP challenge ###
 
 - name: Create a challenge for sample.com using a account key from a variable.
@@ -233,8 +263,9 @@ EXAMPLES = R'''
 #     record: "{{ sample_com_challenge.challenge_data['sample.com']['dns-01'].record }}"
 #     type: TXT
 #     ttl: 60
+#     state: present
 #     # Note: route53 requires TXT entries to be enclosed in quotes
-#     value: "{{ sample_com_challenge.challenge_data['sample.com']['dns-01'].resource_value }}"
+#     value: "{{ sample_com_challenge.challenge_data['sample.com']['dns-01'].resource_value | regex_replace('^(.*)$', '\"\\1\"') }}"
 #     when: sample_com_challenge is changed
 #
 # Alternative way:
@@ -244,9 +275,10 @@ EXAMPLES = R'''
 #     record: "{{ item.key }}"
 #     type: TXT
 #     ttl: 60
+#     state: present
 #     # Note: item.value is a list of TXT entries, and route53
 #     # requires every entry to be enclosed in quotes
-#     value: "{{ item.value | map('regex_replace', '^(.*)$', '\'\\1\'' ) | list }}"
+#     value: "{{ item.value | map('regex_replace', '^(.*)$', '\"\\1\"' ) | list }}"
 #     loop: "{{ sample_com_challenge.challenge_data_dns | dictsort }}"
 #     when: sample_com_challenge is changed
 
@@ -277,7 +309,7 @@ challenge_data:
     resource:
       description: the challenge resource that must be created for validation
       returned: changed
-      type: string
+      type: str
       sample: .well-known/acme-challenge/evaGxfADs6pSRb2LAv9IZf17Dt3juxGJ-PCt92wr-oA
     resource_value:
       description:
@@ -290,12 +322,12 @@ challenge_data:
            for details. To do this, you might need the C(b64decode) Jinja filter
            to extract the binary blob from this return value."
       returned: changed
-      type: string
+      type: str
       sample: IlirfxKKXA...17Dt3juxGJ-PCt92wr-oA
     record:
       description: the full DNS record's name for the challenge
       returned: changed and challenge is C(dns-01)
-      type: string
+      type: str
       sample: _acme-challenge.example.com
       version_added: "2.5"
 challenge_data_dns:
@@ -309,23 +341,23 @@ authorizations:
   type: complex
   contains:
       authorization:
-        description: ACME authorization object. See U(https://tools.ietf.org/html/draft-ietf-acme-acme-14#section-7.1.4)
+        description: ACME authorization object. See U(https://tools.ietf.org/html/draft-ietf-acme-acme-18#section-7.1.4)
         returned: success
         type: dict
 order_uri:
   description: ACME order URI.
   returned: changed
-  type: string
+  type: str
   version_added: "2.5"
 finalization_uri:
   description: ACME finalization URI.
   returned: changed
-  type: string
+  type: str
   version_added: "2.5"
 account_uri:
   description: ACME account URI.
   returned: changed
-  type: string
+  type: str
   version_added: "2.5"
 '''
 
@@ -402,16 +434,21 @@ class ACMEClient(object):
             contact = []
             if module.params['account_email']:
                 contact.append('mailto:' + module.params['account_email'])
-            self.changed = self.account.init_account(
+            created, account_data = self.account.setup_account(
                 contact,
                 agreement=module.params.get('agreement'),
                 terms_agreed=module.params.get('terms_agreed'),
                 allow_creation=modify_account,
-                update_contact=modify_account
             )
+            if account_data is None:
+                raise ModuleFailException(msg='Account does not exist or is deactivated.')
+            updated = False
+            if not created and account_data and modify_account:
+                updated, account_data = self.account.update_account(account_data, contact)
+            self.changed = created or updated
         else:
             # This happens if modify_account is False and the ACME v1
-            # protocol is used. In this case, we do not call init_account()
+            # protocol is used. In this case, we do not call setup_account()
             # to avoid accidental creation of an account. This is OK
             # since for ACME v1, the account URI is not needed to send a
             # signed ACME request.
@@ -494,11 +531,11 @@ class ACMEClient(object):
             keyauthorization = self.account.get_keyauthorization(token)
 
             if type == 'http-01':
-                # https://tools.ietf.org/html/draft-ietf-acme-acme-14#section-8.3
+                # https://tools.ietf.org/html/draft-ietf-acme-acme-18#section-8.3
                 resource = '.well-known/acme-challenge/' + token
                 data[type] = {'resource': resource, 'resource_value': keyauthorization}
             elif type == 'dns-01':
-                # https://tools.ietf.org/html/draft-ietf-acme-acme-14#section-8.4
+                # https://tools.ietf.org/html/draft-ietf-acme-acme-18#section-8.4
                 resource = '_acme-challenge'
                 value = nopad_b64(hashlib.sha256(to_bytes(keyauthorization)).digest())
                 record = (resource + domain[1:]) if domain.startswith('*.') else (resource + '.' + domain)
@@ -575,7 +612,7 @@ class ACMEClient(object):
         '''
         Create a new certificate based on the csr.
         Return the certificate object as dict
-        https://tools.ietf.org/html/draft-ietf-acme-acme-14#section-7.4
+        https://tools.ietf.org/html/draft-ietf-acme-acme-18#section-7.4
         '''
         csr = pem_to_der(self.csr)
         new_cert = {
@@ -609,7 +646,7 @@ class ACMEClient(object):
     def _download_cert(self, url):
         '''
         Download and parse the certificate chain.
-        https://tools.ietf.org/html/draft-ietf-acme-acme-14#section-7.4.2
+        https://tools.ietf.org/html/draft-ietf-acme-acme-18#section-7.4.2
         '''
         content, info = self.account.get_request(url, parse_json_result=False, headers={'Accept': 'application/pem-certificate-chain'})
 
@@ -677,7 +714,7 @@ class ACMEClient(object):
     def _new_order_v2(self):
         '''
         Start a new certificate order (ACME v2 protocol).
-        https://tools.ietf.org/html/draft-ietf-acme-acme-14#section-7.4
+        https://tools.ietf.org/html/draft-ietf-acme-acme-18#section-7.4
         '''
         identifiers = []
         for domain in self.domains:
@@ -834,7 +871,7 @@ class ACMEClient(object):
         '''
         Deactivates all valid authz's. Does not raise exceptions.
         https://community.letsencrypt.org/t/authorization-deactivation/19860/2
-        https://tools.ietf.org/html/draft-ietf-acme-acme-14#section-7.5.2
+        https://tools.ietf.org/html/draft-ietf-acme-acme-18#section-7.5.2
         '''
         authz_deactivate = {
             'status': 'deactivated'
@@ -862,24 +899,24 @@ def main():
         argument_spec=dict(
             account_key_src=dict(type='path', aliases=['account_key']),
             account_key_content=dict(type='str', no_log=True),
-            account_uri=dict(required=False, type='str'),
-            modify_account=dict(required=False, type='bool', default=True),
-            acme_directory=dict(required=False, default='https://acme-staging.api.letsencrypt.org/directory', type='str'),
-            acme_version=dict(required=False, default=1, choices=[1, 2], type='int'),
-            validate_certs=dict(required=False, default=True, type='bool'),
-            account_email=dict(required=False, default=None, type='str'),
-            agreement=dict(required=False, type='str'),
-            terms_agreed=dict(required=False, default=False, type='bool'),
-            challenge=dict(required=False, default='http-01', choices=['http-01', 'dns-01', 'tls-alpn-01'], type='str'),
-            csr=dict(required=True, aliases=['src'], type='path'),
-            data=dict(required=False, default=None, type='dict'),
-            dest=dict(aliases=['cert'], type='path'),
-            fullchain_dest=dict(aliases=['fullchain'], type='path'),
-            chain_dest=dict(required=False, default=None, aliases=['chain'], type='path'),
-            remaining_days=dict(required=False, default=10, type='int'),
-            deactivate_authzs=dict(required=False, default=False, type='bool'),
-            force=dict(required=False, default=False, type='bool'),
-            select_crypto_backend=dict(required=False, choices=['auto', 'openssl', 'cryptography'], default='auto', type='str'),
+            account_uri=dict(type='str'),
+            modify_account=dict(type='bool', default=True),
+            acme_directory=dict(type='str', default='https://acme-staging.api.letsencrypt.org/directory'),
+            acme_version=dict(type='int', default=1, choices=[1, 2]),
+            validate_certs=dict(default=True, type='bool'),
+            account_email=dict(type='str'),
+            agreement=dict(type='str'),
+            terms_agreed=dict(type='bool', default=False),
+            challenge=dict(type='str', default='http-01', choices=['http-01', 'dns-01', 'tls-alpn-01']),
+            csr=dict(type='path', required=True, aliases=['src']),
+            data=dict(type='dict'),
+            dest=dict(type='path', aliases=['cert']),
+            fullchain_dest=dict(type='path', aliases=['fullchain']),
+            chain_dest=dict(type='path', aliases=['chain']),
+            remaining_days=dict(type='int', default=10),
+            deactivate_authzs=dict(type='bool', default=False),
+            force=dict(type='bool', default=False),
+            select_crypto_backend=dict(type='str', default='auto', choices=['auto', 'openssl', 'cryptography']),
         ),
         required_one_of=(
             ['account_key_src', 'account_key_content'],

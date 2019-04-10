@@ -51,6 +51,7 @@ options:
     - Bandwidth limit for volume in M or G units.
       M will set MB/s
       G will set GB/s
+      To clear an existing Qos setting using 0 (zero)
     version_added: '2.8'
 extends_documentation_fragment:
 - purestorage.fa
@@ -98,6 +99,14 @@ EXAMPLES = r'''
     fa_url: 10.10.10.2
     api_token: e31060a7-21fc-e277-6240-25983c6c4592
     state: present
+
+- name: Clear volume QoS from volume foo
+  purefa_volume:
+    name: foo
+    qos: 0
+    fa_url: 10.10.10.2
+    api_token: e31060a7-21fc-e277-6240-25983c6c4592
+    state: present
 '''
 
 RETURN = r'''
@@ -135,7 +144,7 @@ def get_volume(module, array):
     """Return Volume or None"""
     try:
         return array.get_volume(module.params['name'])
-    except:
+    except Exception:
         return None
 
 
@@ -146,7 +155,7 @@ def get_destroyed_volume(module, array):
             return True
         else:
             return False
-    except:
+    except Exception:
         return False
 
 
@@ -154,7 +163,7 @@ def get_target(module, array):
     """Return Volume or None"""
     try:
         return array.get_volume(module.params['target'])
-    except:
+    except Exception:
         return None
 
 
@@ -167,7 +176,7 @@ def create_volume(module, array):
                 array.create_volume(module.params['name'], module.params['size'],
                                     bandwidth_limit=module.params['qos'])
                 changed = True
-            except:
+            except Exception:
                 module.fail_json(msg='Volume {0} creation failed.'.format(module.params['name']))
         else:
             module.fail_json(msg='QoS value {0} out of range.'.format(module.params['qos']))
@@ -175,7 +184,7 @@ def create_volume(module, array):
         try:
             array.create_volume(module.params['name'], module.params['size'])
             changed = True
-        except:
+        except Exception:
             module.fail_json(msg='Volume {0} creation failed.'.format(module.params['name']))
 
     module.exit_json(changed=changed)
@@ -192,7 +201,7 @@ def copy_from_volume(module, array):
             array.copy_volume(module.params['name'],
                               module.params['target'])
             changed = True
-        except:
+        except Exception:
             module.fail_json(msg='Copy volume {0} to volume {1} failed.'.format(module.params['name'],
                                                                                 module.params['target']))
     elif tgt is not None and module.params['overwrite']:
@@ -201,7 +210,7 @@ def copy_from_volume(module, array):
                               module.params['target'],
                               overwrite=module.params['overwrite'])
             changed = True
-        except:
+        except Exception:
             module.fail_json(msg='Copy volume {0} to volume {1} failed.'.format(module.params['name'],
                                                                                 module.params['target']))
 
@@ -221,16 +230,22 @@ def update_volume(module, array):
                 try:
                     array.extend_volume(module.params['name'], module.params['size'])
                     changed = True
-                except:
+                except Exception:
                     module.fail_json(msg='Volume {0} resize failed.'.format(module.params['name']))
     if module.params['qos']:
         if human_to_bytes(module.params['qos']) != vol_qos['bandwidth_limit']:
-            if 549755813888 >= int(human_to_bytes(module.params['qos'])) >= 1048576:
+            if module.params['qos'] == '0':
+                try:
+                    array.set_volume(module.params['name'], bandwidth_limit='')
+                    changed = True
+                except Exception:
+                    module.fail_json(msg='Volume {0} QoS removal failed.'.format(module.params['name']))
+            elif 549755813888 >= int(human_to_bytes(module.params['qos'])) >= 1048576:
                 try:
                     array.set_volume(module.params['name'],
                                      bandwidth_limit=module.params['qos'])
                     changed = True
-                except:
+                except Exception:
                     module.fail_json(msg='Volume {0} QoS change failed.'.format(module.params['name']))
             else:
                 module.fail_json(msg='QoS value {0} out of range. Check documentation.'.format(module.params['qos']))
@@ -247,10 +262,10 @@ def delete_volume(module, array):
             if module.params['eradicate']:
                 try:
                     array.eradicate_volume(module.params['name'])
-                except:
+                except Exception:
                     module.fail_json(msg='Eradicate volume {0} failed.'.format(module.params['name']))
             changed = True
-        except:
+        except Exception:
             module.fail_json(msg='Delete volume {0} failed.'.format(module.params['name']))
     module.exit_json(changed=changed)
 
@@ -261,7 +276,7 @@ def eradicate_volume(module, array):
     try:
         array.eradicate_volume(module.params['name'])
         changed = True
-    except:
+    except Exception:
         module.fail_json(msg='Eradication of volume {0} failed'.format(module.params['name']))
     module.exit_json(changed=changed)
 

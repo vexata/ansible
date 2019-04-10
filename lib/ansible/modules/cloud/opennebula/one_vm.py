@@ -52,6 +52,9 @@ options:
     description:
       - Password of the user to login into OpenNebula RPC server. If not set
       - then the value of the C(ONE_PASSWORD) environment variable is used.
+      - if both I(api_username) or I(api_password) are not set, then it will try
+      - authenticate with ONE auth file. Default path is "~/.one/one_auth".
+      - Set environment variable C(ONE_AUTH) to override this path.
   template_name:
     description:
       - Name of VM template to use to create a new instace
@@ -359,44 +362,44 @@ instances:
     contains:
         vm_id:
             description: vm id
-            type: integer
+            type: int
             sample: 153
         vm_name:
             description: vm name
-            type: string
+            type: str
             sample: foo
         template_id:
             description: vm's template id
-            type: integer
+            type: int
             sample: 153
         group_id:
             description: vm's group id
-            type: integer
+            type: int
             sample: 1
         group_name:
             description: vm's group name
-            type: string
+            type: str
             sample: one-users
         owner_id:
             description: vm's owner id
-            type: integer
+            type: int
             sample: 143
         owner_name:
             description: vm's owner name
-            type: string
+            type: str
             sample: app-user
         mode:
             description: vm's mode
-            type: string
+            type: str
             returned: success
             sample: 660
         state:
             description: state of an instance
-            type: string
+            type: str
             sample: ACTIVE
         lcm_state:
             description: lcm state of an instance that is only relevant when the state is ACTIVE
-            type: string
+            type: str
             sample: RUNNING
         cpu:
             description: Percentage of CPU divided by 100
@@ -408,11 +411,11 @@ instances:
             sample: 2
         memory:
             description: The size of the memory in MB
-            type: string
+            type: str
             sample: 4096 MB
         disk_size:
             description: The size of the disk in MB
-            type: string
+            type: str
             sample: 20480 MB
         networks:
             description: a list of dictionaries with info about IP, NAME, MAC, SECURITY_GROUPS for each NIC
@@ -433,7 +436,7 @@ instances:
                     ]
         uptime_h:
             description: Uptime of the instance in hours
-            type: integer
+            type: int
             sample: 35
         labels:
             description: A list of string labels that are associated with the instance
@@ -461,44 +464,44 @@ tagged_instances:
     contains:
         vm_id:
             description: vm id
-            type: integer
+            type: int
             sample: 153
         vm_name:
             description: vm name
-            type: string
+            type: str
             sample: foo
         template_id:
             description: vm's template id
-            type: integer
+            type: int
             sample: 153
         group_id:
             description: vm's group id
-            type: integer
+            type: int
             sample: 1
         group_name:
             description: vm's group name
-            type: string
+            type: str
             sample: one-users
         owner_id:
             description: vm's user id
-            type: integer
+            type: int
             sample: 143
         owner_name:
             description: vm's user name
-            type: string
+            type: str
             sample: app-user
         mode:
             description: vm's mode
-            type: string
+            type: str
             returned: success
             sample: 660
         state:
             description: state of an instance
-            type: string
+            type: str
             sample: ACTIVE
         lcm_state:
             description: lcm state of an instance that is only relevant when the state is ACTIVE
-            type: string
+            type: str
             sample: RUNNING
         cpu:
             description: Percentage of CPU divided by 100
@@ -510,11 +513,11 @@ tagged_instances:
             sample: 2
         memory:
             description: The size of the memory in MB
-            type: string
+            type: str
             sample: 4096 MB
         disk_size:
             description: The size of the disk in MB
-            type: string
+            type: str
             sample: 20480 MB
         networks:
             description: a list of dictionaries with info about IP, NAME, MAC, SECURITY_GROUPS for each NIC
@@ -535,7 +538,7 @@ tagged_instances:
                     ]
         uptime_h:
             description: Uptime of the instance in hours
-            type: integer
+            type: int
             sample: 35
         labels:
             description: A list of string labels that are associated with the instance
@@ -611,12 +614,12 @@ def get_vm_by_id(client, vm_id):
     # -2: All vms user can Use
     # -1: Vms belonging to the user and any of his groups - default
     # >= 0: UID User's vms
-    pool.info(filter=-2)
+    pool.info(filter=-2, range_start=int(vm_id), range_end=int(vm_id))
 
-    for vm in pool:
-        if str(vm.id) == str(vm_id):
-            return vm
-    return None
+    if len(pool) == 1:
+        return pool[0]
+    else:
+        return None
 
 
 def get_vms_by_ids(module, client, state, ids):
@@ -1220,8 +1223,8 @@ def get_connection_info(module):
     if not password:
         password = os.environ.get('ONE_PASSWORD')
 
-    if not(url and username and password):
-        module.fail_json(msg="One or more connection parameters (api_url, api_username, api_password) were not specified")
+    if not url:
+        module.fail_json(msg="Opennebula API url (api_url) is not specified")
     from collections import namedtuple
 
     auth_params = namedtuple('auth', ('url', 'username', 'password'))
@@ -1309,7 +1312,10 @@ def main():
     count_labels = params.get('count_labels')
     disk_saveas = params.get('disk_saveas')
 
-    client = oca.Client(auth.username + ':' + auth.password, auth.url)
+    if not (auth.username and auth.password):
+        client = oca.Client(None, auth.url)
+    else:
+        client = oca.Client(auth.username + ':' + auth.password, auth.url)
 
     if attributes:
         attributes = dict((key.upper(), value) for key, value in attributes.items())

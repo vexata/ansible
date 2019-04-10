@@ -24,6 +24,7 @@ __metaclass__ = type
 
 import json
 
+from ansible import context
 import ansible.constants as C
 from ansible.errors import AnsibleError
 from ansible.galaxy.token import GalaxyToken
@@ -63,7 +64,7 @@ class GalaxyAPI(object):
         self.galaxy = galaxy
         self.token = GalaxyToken()
         self._api_server = C.GALAXY_SERVER
-        self._validate_certs = not galaxy.options.ignore_certs
+        self._validate_certs = not context.CLIARGS['ignore_certs']
         self.baseurl = None
         self.version = None
         self.initialized = False
@@ -71,8 +72,8 @@ class GalaxyAPI(object):
         display.debug('Validate TLS certificates: %s' % self._validate_certs)
 
         # set the API server
-        if galaxy.options.api_server != C.GALAXY_SERVER:
-            self._api_server = galaxy.options.api_server
+        if context.CLIARGS['api_server'] != C.GALAXY_SERVER:
+            self._api_server = context.CLIARGS['api_server']
 
     def __auth_header(self):
         token = self.token.get()
@@ -183,7 +184,7 @@ class GalaxyAPI(object):
             role_name = parts[-1]
             if notify:
                 display.display("- downloading role '%s', owned by %s" % (role_name, user_name))
-        except:
+        except Exception:
             raise AnsibleError("Invalid role name (%s). Specify role as format: username.rolename" % role_name)
 
         url = '%s/roles/?owner__username=%s&name=%s' % (self.baseurl, user_name, role_name)
@@ -210,7 +211,7 @@ class GalaxyAPI(object):
                 results += data['results']
                 done = (data.get('next_link', None) is None)
             return results
-        except:
+        except Exception:
             return None
 
     @g_connect

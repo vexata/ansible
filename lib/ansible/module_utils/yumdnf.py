@@ -29,11 +29,13 @@ yumdnf_argument_spec = dict(
         disable_plugin=dict(type='list', default=[]),
         disablerepo=dict(type='list', default=[]),
         download_only=dict(type='bool', default=False),
+        download_dir=dict(type='str', default=None),
         enable_plugin=dict(type='list', default=[]),
         enablerepo=dict(type='list', default=[]),
         exclude=dict(type='list', default=[]),
         installroot=dict(type='str', default="/"),
         install_repoquery=dict(type='bool', default=True),
+        install_weak_deps=dict(type='bool', default=True),
         list=dict(type='str'),
         name=dict(type='list', aliases=['pkg'], default=[]),
         releasever=dict(default=None),
@@ -72,11 +74,13 @@ class YumDnf(with_metaclass(ABCMeta, object)):
         self.disable_plugin = self.module.params['disable_plugin']
         self.disablerepo = self.module.params.get('disablerepo', [])
         self.download_only = self.module.params['download_only']
+        self.download_dir = self.module.params['download_dir']
         self.enable_plugin = self.module.params['enable_plugin']
         self.enablerepo = self.module.params.get('enablerepo', [])
         self.exclude = self.module.params['exclude']
         self.installroot = self.module.params['installroot']
         self.install_repoquery = self.module.params['install_repoquery']
+        self.install_weak_deps = self.module.params['install_weak_deps']
         self.list = self.module.params['list']
         self.names = [p.strip() for p in self.module.params['name']]
         self.releasever = self.module.params['releasever']

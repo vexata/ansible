@@ -47,11 +47,11 @@ EXAMPLES = '''
     - name: Get facts for one route table
       azure_rm_routetable_facts:
         name: Testing
-        resource_group: foo
+        resource_group: myResourceGroup
 
     - name: Get facts for all route tables
       azure_rm_routetable_facts:
-        resource_group: foo
+        resource_group: myResourceGroup
 
     - name: Get facts by tags
       azure_rm_routetable_facts:
@@ -98,7 +98,7 @@ routes:
 
 try:
     from msrestazure.azure_exceptions import CloudError
-except:
+except Exception:
     # This is handled in azure_rm_common
     pass
 

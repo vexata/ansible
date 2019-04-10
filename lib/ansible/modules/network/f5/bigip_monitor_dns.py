@@ -223,10 +223,11 @@ EXAMPLES = r'''
     query_type: aaaa
     up_interval: 5
     adaptive: no
-    password: secret
-    server: lb.mydomain.com
     state: present
-    user: admin
+    provider:
+      user: admin
+      password: secret
+      server: lb.mydomain.com
   delegate_to: localhost
 '''
 
@@ -234,12 +235,12 @@ RETURN = r'''
 parent:
   description: New parent template of the monitor.
   returned: changed
-  type: string
+  type: str
   sample: http
 ip:
   description: The new IP of IP/port definition.
   returned: changed
-  type: string
+  type: str
   sample: 10.12.13.14
 interval:
   description: The new interval in which to run the monitor check.
@@ -264,12 +265,12 @@ adaptive:
 accept_rcode:
   description: RCODE required in the response for an up status.
   returned: changed
-  type: string
+  type: str
   sample: no-error
 allowed_divergence_type:
   description: Type of divergence used for adaptive response time monitoring.
   returned: changed
-  type: string
+  type: str
   sample: absolute
 allowed_divergence_value:
   description:
@@ -296,14 +297,14 @@ sampling_timespan:
 answer_section_contains:
   description: Type of DNS query that the monitor sends.
   returned: changed
-  type: string
+  type: str
   sample: query-type
 manual_resume:
   description:
     - Whether the system automatically changes the status of a resource to enabled at the
       next successful monitor check.
   returned: changed
-  type: string
+  type: str
   sample: query-type
 up_interval:
   description: Interval for the system to use to perform the health check when a resource is up.
@@ -313,17 +314,17 @@ up_interval:
 query_name:
   description: Query name for the monitor to use in a DNS query.
   returned: changed
-  type: string
+  type: str
   sample: foo
 query_type:
   description: Type of DNS query that the monitor sends. Either C(a) or C(aaaa).
   returned: changed
-  type: string
+  type: str
   sample: aaaa
 receive:
   description: IP address that the monitor uses from the resource record sections of the DNS response.
   returned: changed
-  type: string
+  type: str
   sample: 2.3.2.4
 reverse:
   description: Whether the monitor operates in reverse mode.
@@ -335,7 +336,7 @@ port:
     - Alias port or service for the monitor to check, on behalf of the pools or pool
       members with which the monitor is associated.
   returned: changed
-  type: string
+  type: str
   sample: 80
 transparent:
   description: Whether the monitor operates in transparent mode.

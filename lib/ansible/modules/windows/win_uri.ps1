@@ -15,7 +15,6 @@ $spec = @{
         method = @{
             type = "str"
             default = "GET"
-            choices = "CONNECT", "DELETE", "GET", "HEAD", "MERGE", "OPTIONS", "PATCH", "POST", "PUT", "REFRESH", "TRACE"
        }
        content_type = @{ type = "str" }
        headers = @{ type = "dict" }
@@ -44,7 +43,7 @@ $spec = @{
 $module = [Ansible.Basic.AnsibleModule]::Create($args, $spec)
 
 $url = $module.Params.url
-$method = $module.Params.method
+$method = $module.Params.method.ToUpper()
 $content_type = $module.Params.content_type
 $headers = $module.Params.headers
 $body = $module.Params.body
@@ -67,6 +66,10 @@ $JSON_CANDIDATES = @('text', 'json', 'javascript')
 
 $module.Result.elapsed = 0
 $module.Result.url = $url
+
+if (-not ($method -cmatch '^[A-Z]+$')) {
+    $module.FailJson("Parameter 'method' needs to be a single word in uppercase, like GET or POST.")
+}
 
 if ($creates -and (Test-AnsiblePath -Path $creates)) {
     $module.Result.skipped = $true
@@ -179,7 +182,7 @@ if ($user -and $password) {
 }
 
 if ($null -ne $body) {
-    if ($body -is [Hashtable]) {
+    if ($body -is [System.Collections.IDictionary] -or $body -is [System.Collections.IList]) {
         $body_string = ConvertTo-Json -InputObject $body -Compress
     } elseif ($body -isnot [String]) {
         $body_string = $body.ToString()

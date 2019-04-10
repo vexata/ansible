@@ -61,7 +61,8 @@ ontap_facts:
             "storage_failover_info": {...},
             "vserver_login_banner_info": {...},
             "vserver_motd_info": {...},
-            "vserver_info": {...}
+            "vserver_info": {...},
+            "ontap_version": {...}
     }'
 '''
 
@@ -85,7 +86,7 @@ except ImportError:
 HAS_NETAPP_LIB = netapp_utils.has_netapp_lib()
 
 
-class NetAppGatherFacts(object):
+class NetAppONTAPGatherFacts(object):
 
     def __init__(self, module):
         self.module = module
@@ -95,6 +96,16 @@ class NetAppGatherFacts(object):
             self.module.fail_json(msg="the python NetApp-Lib module is required")
         else:
             self.server = netapp_utils.setup_na_ontap_zapi(module=self.module)
+
+    def ontapi(self):
+        api_call = netapp_utils.zapi.NaElement('system-get-ontapi-version')
+        try:
+            results = self.server.invoke_successfully(api_call, enable_tunneling=False)
+            ontapi_version = results.get_child_content('minor-version')
+            return ontapi_version
+        except netapp_utils.zapi.NaApiError as e:
+            self.module.fail_json(msg="Error calling API %s: %s" %
+                                  (api_call.to_string(), to_native(e)), exception=traceback.format_exc())
 
     def call_api(self, call, query=None):
         api_call = netapp_utils.zapi.NaElement(call)
@@ -108,8 +119,10 @@ class NetAppGatherFacts(object):
             result = self.server.invoke_successfully(api_call, enable_tunneling=False)
             return result
         except netapp_utils.zapi.NaApiError as e:
-            self.module.fail_json(msg="Error calling API %s: %s" %
-                                  (call, to_native(e)), exception=traceback.format_exc())
+            if call in ['security-key-manager-key-get-iter']:
+                return result
+            else:
+                self.module.fail_json(msg="Error calling API %s: %s" % (call, to_native(e)), exception=traceback.format_exc())
 
     def get_ifgrp_info(self):
         net_port_info = self.netapp_info['net_port_info']
@@ -132,6 +145,9 @@ class NetAppGatherFacts(object):
 
     def get_generic_get_iter(self, call, attribute=None, field=None, query=None, children='attributes-list'):
         generic_call = self.call_api(call, query)
+
+        if generic_call is None:
+            return None
 
         if field is None:
             out = []
@@ -163,10 +179,37 @@ class NetAppGatherFacts(object):
         return out
 
     def get_all(self):
+        results = netapp_utils.get_cserver(self.server)
+        cserver = netapp_utils.setup_na_ontap_zapi(module=self.module, vserver=results)
+        netapp_utils.ems_log_event("na_ontap_gather_facts", cserver)
         self.netapp_info['net_interface_info'] = self.get_generic_get_iter(
             'net-interface-get-iter',
             attribute='net-interface-info',
             field='interface-name',
+            query={'max-records': '1024'}
+        )
+        self.netapp_info['nvme_info'] = self.get_generic_get_iter(
+            'nvme-get-iter',
+            attribute='nvme-target-service-info',
+            field='vserver',
+            query={'max-records': '1024'}
+        )
+        self.netapp_info['nvme_interface_info'] = self.get_generic_get_iter(
+            'nvme-interface-get-iter',
+            attribute='nvme-interface-info',
+            field='vserver',
+            query={'max-records': '1024'}
+        )
+        self.netapp_info['nvme_subsystem_info'] = self.get_generic_get_iter(
+            'nvme-subsystem-get-iter',
+            attribute='nvme-subsystem-info',
+            field='subsystem',
+            query={'max-records': '1024'}
+        )
+        self.netapp_info['nvme_namespace_info'] = self.get_generic_get_iter(
+            'nvme-namespace-get-iter',
+            attribute='nvme-namespace-info',
+            field='path',
             query={'max-records': '1024'}
         )
         self.netapp_info['net_port_info'] = self.get_generic_get_iter(
@@ -196,7 +239,7 @@ class NetAppGatherFacts(object):
         self.netapp_info['volume_info'] = self.get_generic_get_iter(
             'volume-get-iter',
             attribute='volume-attributes',
-            field=('name', 'node', 'aggr-name'),
+            field=('name', 'owning-vserver-name'),
             query={'max-records': '1024'}
         )
         self.netapp_info['lun_info'] = self.get_generic_get_iter(
@@ -234,6 +277,7 @@ class NetAppGatherFacts(object):
             field=('node', 'key-id'),
             query={'max-records': '1024'}
         )
+
         self.netapp_info['vserver_info'] = self.get_generic_get_iter(
             'vserver-get-iter',
             attribute='vserver-info',
@@ -241,20 +285,30 @@ class NetAppGatherFacts(object):
             query={'max-records': '1024'}
         )
 
+        self.netapp_info['ontap_version'] = self.ontapi()
+
         return self.netapp_info
 
 
 # https://stackoverflow.com/questions/14962485/finding-a-key-recursively-in-a-dictionary
-def _finditem(obj, key):
+def __finditem(obj, key):
 
     if key in obj:
         return obj[key]
     for dummy, v in obj.items():
         if isinstance(v, dict):
-            item = _finditem(v, key)
+            item = __finditem(v, key)
             if item is not None:
                 return item
     return None
+
+
+def _finditem(obj, key):
+
+    value = __finditem(obj, key)
+    if value is not None:
+        return value
+    raise KeyError(key)
 
 
 def convert_keys(d):
@@ -286,7 +340,7 @@ def main():
         module.fail_json(msg="json missing")
 
     state = module.params['state']
-    v = NetAppGatherFacts(module)
+    v = NetAppONTAPGatherFacts(module)
     g = v.get_all()
     result = {'state': state, 'changed': False}
     module.exit_json(ansible_facts={'ontap_facts': g}, **result)

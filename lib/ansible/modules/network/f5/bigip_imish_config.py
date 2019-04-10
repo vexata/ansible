@@ -153,6 +153,28 @@ options:
         configuration against.
       - When specifying this argument, the task should also modify the
         C(diff_against) value and set it to I(intended).
+  backup_options:
+    description:
+      - This is a dict object containing configurable options related to backup file path.
+        The value of this option is read only when C(backup) is set to I(yes), if C(backup) is set
+        to I(no) this option will be silently ignored.
+    suboptions:
+      filename:
+        description:
+          - The filename to be used to store the backup configuration. If the the filename
+            is not given it will be generated based on the hostname, current time and date
+            in format defined by <hostname>_config.<current-date>@<current-time>
+      dir_path:
+        description:
+          - This option provides the path ending with directory name in which the backup
+            configuration file will be stored. If the directory does not exist it will be first
+            created and the filename is either the value of C(filename) or default filename
+            as described in C(filename) options description. If the path value is not given
+            in that case a I(backup) directory will be created in the current working directory
+            and backup configuration will be copied in C(filename) within I(backup) directory.
+        type: path
+    type: dict
+    version_added: "2.8"
 notes:
   - Abbreviated commands are NOT idempotent, see
     L(Network FAQ,../network/user_guide/faq.html#why-do-the-config-modules-always-return-changed-true-with-abbreviated-commands).
@@ -166,11 +188,21 @@ EXAMPLES = r'''
   bigip_imish_config:
     lines: bfd slow-timer 2000
     save_when: modified
+    provider:
+      user: admin
+      password: secret
+      server: lb.mydomain.com
+  delegate_to: localhost
 
 - name: diff the running-config against a provided config
   bigip_imish_config:
     diff_against: intended
     intended_config: "{{ lookup('file', 'master.cfg') }}"
+    provider:
+      user: admin
+      password: secret
+      server: lb.mydomain.com
+  delegate_to: localhost
 
 - name: Add config to a parent block
   bigip_imish_config:
@@ -183,6 +215,11 @@ EXAMPLES = r'''
       - neighbor 10.10.10.11 fall-over bfd
     parents: router bgp 64664
     match: exact
+    provider:
+      user: admin
+      password: secret
+      server: lb.mydomain.com
+  delegate_to: localhost
 
 - name: Remove an existing acl before writing it
   bigip_imish_config:
@@ -191,6 +228,11 @@ EXAMPLES = r'''
       - access-list 10 permit 20.20.20.21
       - access-list 10 deny any
     before: no access-list 10
+    provider:
+      user: admin
+      password: secret
+      server: lb.mydomain.com
+  delegate_to: localhost
 
 - name: for idempotency, use full-form commands
   bigip_imish_config:
@@ -199,6 +241,24 @@ EXAMPLES = r'''
       - description My Interface
     # parents: int ANYCAST-P2P-2
     parents: interface ANYCAST-P2P-2
+    provider:
+      user: admin
+      password: secret
+      server: lb.mydomain.com
+  delegate_to: localhost
+
+- name: configurable backup path
+  bigip_imish_config:
+    lines: bfd slow-timer 2000
+    backup: yes
+    provider:
+      user: admin
+      password: secret
+      server: lb.mydomain.com
+    backup_options:
+      filename: backup.cfg
+      dir_path: /home/user
+  delegate_to: localhost
 '''
 
 RETURN = r'''
@@ -215,7 +275,7 @@ updates:
 backup_path:
   description: The full path to the backup file
   returned: when backup is yes
-  type: string
+  type: str
   sample: /playbooks/ansible/backup/bigip_imish_config.2016-07-16@22:28:34
 '''
 
@@ -682,6 +742,10 @@ class ModuleManager(object):
 class ArgumentSpec(object):
     def __init__(self):
         self.supports_check_mode = True
+        backup_spec = dict(
+            filename=dict(),
+            dir_path=dict(type='path')
+        )
         argument_spec = dict(
             route_domain=dict(default=0),
             src=dict(type='path'),
@@ -698,6 +762,7 @@ class ArgumentSpec(object):
             intended_config=dict(),
 
             backup=dict(type='bool', default=False),
+            backup_options=dict(type='dict', options=backup_spec),
 
             save_when=dict(choices=['always', 'never', 'modified', 'changed'], default='never'),
 

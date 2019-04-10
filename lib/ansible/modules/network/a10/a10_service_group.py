@@ -109,7 +109,7 @@ RETURN = '''
 content:
   description: the full info regarding the slb_service_group
   returned: success
-  type: string
+  type: str
   sample: "mynewservicegroup"
 '''
 import json
@@ -137,7 +137,7 @@ def validate_servers(module, servers):
         if 'port' in item:
             try:
                 item['port'] = int(item['port'])
-            except:
+            except Exception:
                 module.fail_json(msg="server port definitions must be integers")
         else:
             module.fail_json(msg="server definitions must define the port field")

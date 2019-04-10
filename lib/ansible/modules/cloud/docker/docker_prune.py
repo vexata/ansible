@@ -79,19 +79,15 @@ options:
     default: no
 
 extends_documentation_fragment:
-    - docker
+  - docker
+  - docker.docker_py_2_documentation
 
 author:
-    - "Felix Fontein (@felixfontein)"
+  - "Felix Fontein (@felixfontein)"
 
 requirements:
-    - "python >= 2.6"
-    - "docker >= 2.1.0"
-    - "Please note that the L(docker-py,https://pypi.org/project/docker-py/) Python
-       module has been superseded by L(docker,https://pypi.org/project/docker/)
-       (see L(here,https://github.com/docker/docker-py/issues/1310) for details).
-       Version 2.1.0 or newer is only available with the C(docker) module."
-    - "Docker API >= 1.25"
+  - "docker >= 2.1.0"
+  - "Docker API >= 1.25"
 '''
 
 EXAMPLES = '''
@@ -106,6 +102,16 @@ EXAMPLES = '''
   docker_prune:
     containers: yes
     images: yes
+    networks: yes
+    volumes: yes
+    builder_cache: yes
+
+- name: Prune everything (including non-dangling images)
+  docker_prune:
+    containers: yes
+    images: yes
+    images_filters:
+      dangling: false
     networks: yes
     volumes: yes
     builder_cache: yes
@@ -173,29 +179,13 @@ builder_cache_space_reclaimed:
 
 from distutils.version import LooseVersion
 
-from ansible.module_utils.docker_common import AnsibleDockerClient
+from ansible.module_utils.docker.common import AnsibleDockerClient
 
 try:
-    from ansible.module_utils.docker_common import docker_version
+    from ansible.module_utils.docker.common import docker_version, clean_dict_booleans_for_docker_api
 except Exception as dummy:
-    # missing docker-py handled in ansible.module_utils.docker
+    # missing docker-py handled in ansible.module_utils.docker.common
     pass
-
-
-def get_filters(module, name):
-    result = dict()
-    filters = module.params.get(name)
-    if filters is not None:
-        for k, v in filters.items():
-            # Go doesn't like 'True' or 'False'
-            if v is True:
-                v = 'true'
-            elif v is False:
-                v = 'false'
-            else:
-                v = str(v)
-            result[str(k)] = v
-    return result
 
 
 def main():
@@ -222,29 +212,29 @@ def main():
     cache_min_version = '3.3.0'
     if client.module.params['builder_cache'] and client.docker_py_version < LooseVersion(cache_min_version):
         msg = "Error: docker version is %s. Minimum version required for builds option is %s. Use `pip install --upgrade docker` to upgrade."
-        client.module.fail(msg=(msg % (docker_version, cache_min_version)))
+        client.fail(msg % (docker_version, cache_min_version))
 
     result = dict()
 
     if client.module.params['containers']:
-        filters = get_filters(client.module, 'containers_filters')
+        filters = clean_dict_booleans_for_docker_api(client.module.params.get('containers_filters'))
         res = client.prune_containers(filters=filters)
         result['containers'] = res.get('ContainersDeleted') or []
         result['containers_space_reclaimed'] = res['SpaceReclaimed']
 
     if client.module.params['images']:
-        filters = get_filters(client.module, 'images_filters')
+        filters = clean_dict_booleans_for_docker_api(client.module.params.get('images_filters'))
         res = client.prune_images(filters=filters)
         result['images'] = res.get('ImagesDeleted') or []
         result['images_space_reclaimed'] = res['SpaceReclaimed']
 
     if client.module.params['networks']:
-        filters = get_filters(client.module, 'networks_filters')
+        filters = clean_dict_booleans_for_docker_api(client.module.params.get('networks_filters'))
         res = client.prune_networks(filters=filters)
         result['networks'] = res.get('NetworksDeleted') or []
 
     if client.module.params['volumes']:
-        filters = get_filters(client.module, 'volumes_filters')
+        filters = clean_dict_booleans_for_docker_api(client.module.params.get('volumes_filters'))
         res = client.prune_volumes(filters=filters)
         result['volumes'] = res.get('VolumesDeleted') or []
         result['volumes_space_reclaimed'] = res['SpaceReclaimed']

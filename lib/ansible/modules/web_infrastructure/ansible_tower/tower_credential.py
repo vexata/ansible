@@ -93,7 +93,7 @@ options:
         - Domain for openstack type.
     become_method:
       description:
-        - Become method to Use for privledge escalation.
+        - Become method to use for privilege escalation.
       choices: ["None", "sudo", "su", "pbrun", "pfexec", "pmrun"]
     become_username:
       description:
@@ -154,7 +154,7 @@ from ansible.module_utils.ansible_tower import TowerModule, tower_auth_config, t
 
 try:
     import tower_cli
-    import tower_cli.utils.exceptions as exc
+    import tower_cli.exceptions as exc
 
     from tower_cli.conf import settings
 except ImportError:

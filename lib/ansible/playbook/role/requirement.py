@@ -32,6 +32,7 @@ from ansible.module_utils.common.process import get_bin_path
 from ansible.module_utils.six import string_types
 from ansible.playbook.role.definition import RoleDefinition
 from ansible.utils.display import Display
+from ansible.module_utils._text import to_text
 
 __all__ = ['RoleRequirement']
 
@@ -154,7 +155,7 @@ class RoleRequirement(RoleDefinition):
             raise AnsibleError("- scm %s is not currently supported" % scm)
 
         try:
-            scm_path = get_bin_path(scm)
+            scm_path = get_bin_path(scm, required=True)
         except (ValueError, OSError, IOError):
             raise AnsibleError("could not find/use %s, it is required to continue with installing %s" % (scm, src))
 
@@ -163,7 +164,7 @@ class RoleRequirement(RoleDefinition):
         run_scm_cmd(clone_cmd, tempdir)
 
         if scm == 'git' and version:
-            checkout_cmd = [scm_path, 'checkout', version]
+            checkout_cmd = [scm_path, 'checkout', to_text(version)]
             run_scm_cmd(checkout_cmd, os.path.join(tempdir, name))
 
         temp_file = tempfile.NamedTemporaryFile(delete=False, suffix='.tar', dir=C.DEFAULT_LOCAL_TMP)

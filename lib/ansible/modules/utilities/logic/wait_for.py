@@ -50,6 +50,7 @@ options:
   port:
     description:
       - Port number to poll.
+      - C(path) and C(port) are mutually exclusive parameters.
   active_connection_states:
     description:
       - The list of TCP connection states which are counted as active connections.
@@ -67,6 +68,7 @@ options:
     version_added: "1.4"
     description:
       - Path to a file on the filesystem that must exist before continuing.
+      - C(path) and C(port) are mutually exclusive parameters.
   search_regex:
     version_added: "1.4"
     description:
@@ -87,14 +89,16 @@ options:
       - This overrides the normal error message from a failure to meet the required conditions.
 notes:
   - The ability to use search_regex with a port connection was added in 1.7.
-  - Prior to 2.4, testing for the absense of a directory or UNIX socket did not work correctly.
+  - Prior to 2.4, testing for the absence of a directory or UNIX socket did not work correctly.
   - Prior to 2.4, testing for the presence of a file did not work correctly if the remote user did not have read access to that file.
   - Under some circumstances when using mandatory access control, a path may always be treated as being absent even if it exists, but
     can't be modified or created by the remote user either.
   - When waiting for a path, symbolic links will be followed.  Many other modules that manipulate files do not follow symbolic links,
     so operations on the path using other modules may not work exactly as expected.
-  - This module is also supported for Windows targets.
-  - See also M(wait_for_connection)
+seealso:
+- module: wait_for_connection
+- module: win_wait_for
+- module: win_wait_for_process
 author:
     - Jeroen Hoekx (@jhoekx)
     - John Jarvis (@jarv)
@@ -210,18 +214,20 @@ import select
 import socket
 import sys
 import time
+import traceback
 
-from ansible.module_utils.basic import AnsibleModule, load_platform_subclass
+from ansible.module_utils.basic import AnsibleModule, load_platform_subclass, missing_required_lib
 from ansible.module_utils._text import to_native
 
 
 HAS_PSUTIL = False
+PSUTIL_IMP_ERR = None
 try:
     import psutil
     HAS_PSUTIL = True
     # just because we can import it on Linux doesn't mean we will use it
 except ImportError:
-    pass
+    PSUTIL_IMP_ERR = traceback.format_exc()
 
 
 class TCPConnectionInfo(object):
@@ -257,7 +263,7 @@ class TCPConnectionInfo(object):
         self.port = int(self.module.params['port'])
         self.exclude_ips = self._get_exclude_ips()
         if not HAS_PSUTIL:
-            module.fail_json(msg="psutil module required for wait_for")
+            module.fail_json(msg=missing_required_lib('psutil'), exception=PSUTIL_IMP_ERR)
 
     def _get_exclude_ips(self):
         exclude_hosts = self.module.params['exclude_hosts']
@@ -504,7 +510,7 @@ def main():
     for _connection_state in module.params['active_connection_states']:
         try:
             get_connection_state_id(_connection_state)
-        except:
+        except Exception:
             module.fail_json(msg="unknown active_connection_state (%s) defined" % _connection_state, elapsed=0)
 
     start = datetime.datetime.utcnow()
@@ -530,7 +536,7 @@ def main():
                     s = _create_connection(host, port, connect_timeout)
                     s.shutdown(socket.SHUT_RDWR)
                     s.close()
-                except:
+                except Exception:
                     break
             # Conditions not yet met, wait and try again
             time.sleep(module.params['sleep'])
@@ -578,7 +584,7 @@ def main():
                 alt_connect_timeout = math.ceil(_timedelta_total_seconds(end - datetime.datetime.utcnow()))
                 try:
                     s = _create_connection(host, port, min(connect_timeout, alt_connect_timeout))
-                except:
+                except Exception:
                     # Failed to connect by connect_timeout. wait and try again
                     pass
                 else:

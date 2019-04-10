@@ -4,7 +4,8 @@
 Other Tools And Programs
 ########################
 
-.. contents:: Topics
+.. contents::
+   :local:
 
 The Ansible community uses a range of tools for working with the Ansible project. This is a list of some of the most popular of these tools.
 
@@ -82,6 +83,7 @@ There are various ways to find existing issues and pull requests (PRs)
 - `PR by File <https://ansible.sivel.net/pr/byfile.html>`_ - shows a current list of all open pull requests by individual file. An essential tool for Ansible module maintainers.
 - `jctanner's Ansible Tools <https://github.com/jctanner/ansible-tools>`_ - miscellaneous collection of useful helper scripts for Ansible development.
 
+.. _validate-playbook-tools:
 
 ******************************
 Tools for Validating Playbooks

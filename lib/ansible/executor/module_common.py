@@ -34,6 +34,7 @@ from io import BytesIO
 from ansible.release import __version__, __author__
 from ansible import constants as C
 from ansible.errors import AnsibleError
+from ansible.executor.interpreter_discovery import InterpreterDiscoveryRequiredError
 from ansible.executor.powershell import module_manifest as ps_manifest
 from ansible.module_utils._text import to_bytes, to_text, to_native
 from ansible.plugins.loader import module_utils_loader
@@ -94,6 +95,7 @@ _ANSIBALLZ_WRAPPER = True # For test-module script to tell this is a ANSIBALLZ_W
 # LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE
 # USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 def _ansiballz_main():
+%(rlimit)s
     import os
     import os.path
     import sys
@@ -350,6 +352,22 @@ ANSIBALLZ_COVERAGE_TEMPLATE = '''
         cov.start()
 '''
 
+ANSIBALLZ_RLIMIT_TEMPLATE = '''
+    import resource
+
+    existing_soft, existing_hard = resource.getrlimit(resource.RLIMIT_NOFILE)
+
+    # adjust soft limit subject to existing hard limit
+    requested_soft = min(existing_hard, %(rlimit_nofile)d)
+
+    if requested_soft != existing_soft:
+        try:
+            resource.setrlimit(resource.RLIMIT_NOFILE, (requested_soft, existing_hard))
+        except ValueError:
+            # some platforms (eg macOS) lie about their hard limit
+            pass
+'''
+
 
 def _strip_comments(source):
     # Strip comments and blank lines from the wrapper
@@ -442,18 +460,46 @@ def _get_shebang(interpreter, task_vars, templar, args=tuple()):
        file rather than trust that we reformatted what they already have
        correctly.
     """
-    interpreter_config = u'ansible_%s_interpreter' % os.path.basename(interpreter).strip()
+    interpreter_name = os.path.basename(interpreter).strip()
 
-    if interpreter_config not in task_vars:
-        return (None, interpreter)
+    # FUTURE: add logical equivalence for python3 in the case of py3-only modules
 
-    interpreter = templar.template(task_vars[interpreter_config].strip())
-    shebang = u'#!' + interpreter
+    # check for first-class interpreter config
+    interpreter_config_key = "INTERPRETER_%s" % interpreter_name.upper()
+
+    if C.config.get_configuration_definitions().get(interpreter_config_key):
+        # a config def exists for this interpreter type; consult config for the value
+        interpreter_out = C.config.get_config_value(interpreter_config_key, variables=task_vars)
+        discovered_interpreter_config = u'discovered_interpreter_%s' % interpreter_name
+
+        interpreter_out = templar.template(interpreter_out.strip())
+
+        facts_from_task_vars = task_vars.get('ansible_facts', {})
+
+        # handle interpreter discovery if requested
+        if interpreter_out in ['auto', 'auto_legacy', 'auto_silent', 'auto_legacy_silent']:
+            if discovered_interpreter_config not in facts_from_task_vars:
+                # interpreter discovery is desired, but has not been run for this host
+                raise InterpreterDiscoveryRequiredError("interpreter discovery needed",
+                                                        interpreter_name=interpreter_name,
+                                                        discovery_mode=interpreter_out)
+            else:
+                interpreter_out = facts_from_task_vars[discovered_interpreter_config]
+    else:
+        # a config def does not exist for this interpreter type; consult vars for a possible direct override
+        interpreter_config = u'ansible_%s_interpreter' % interpreter_name
+
+        if interpreter_config not in task_vars:
+            return None, interpreter
+
+        interpreter_out = templar.template(task_vars[interpreter_config].strip())
+
+    shebang = u'#!' + interpreter_out
 
     if args:
         shebang = shebang + u' ' + u' '.join(args)
 
-    return (shebang, interpreter)
+    return shebang, interpreter_out
 
 
 def recursive_finder(name, data, py_module_names, py_module_cache, zf):
@@ -462,7 +508,10 @@ def recursive_finder(name, data, py_module_names, py_module_cache, zf):
     the module its module_utils files needs.
     """
     # Parse the module and find the imports of ansible.module_utils
-    tree = ast.parse(data)
+    try:
+        tree = ast.parse(data)
+    except (SyntaxError, IndentationError) as e:
+        raise AnsibleError("Unable to import %s due to %s" % (name, e.msg))
     finder = ModuleDepFinder()
     finder.visit(tree)
 
@@ -667,7 +716,10 @@ def _find_module_utils(module_name, b_module_data, module_path, module_args, tas
 
     if module_substyle == 'python':
         params = dict(ANSIBLE_MODULE_ARGS=module_args,)
-        python_repred_params = repr(json.dumps(params))
+        try:
+            python_repred_params = repr(json.dumps(params))
+        except TypeError as e:
+            raise AnsibleError("Unable to pass options to module, they must be JSON serializable: %s" % to_native(e))
 
         try:
             compression_method = getattr(zipfile, module_compression)
@@ -745,7 +797,8 @@ def _find_module_utils(module_name, b_module_data, module_path, module_args, tas
                 # the write lock.  Go ahead and read the data from disk
                 # instead of re-creating it.
                 try:
-                    zipdata = open(cached_module_filename, 'rb').read()
+                    with open(cached_module_filename, 'rb') as f:
+                        zipdata = f.read()
                 except IOError:
                     raise AnsibleError('A different worker process failed to create module file. '
                                        'Look at traceback for that process for debugging information.')
@@ -759,6 +812,19 @@ def _find_module_utils(module_name, b_module_data, module_path, module_args, tas
         # substituting it into the template as a Python string
         interpreter_parts = interpreter.split(u' ')
         interpreter = u"'{0}'".format(u"', '".join(interpreter_parts))
+
+        # FUTURE: the module cache entry should be invalidated if we got this value from a host-dependent source
+        rlimit_nofile = C.config.get_config_value('PYTHON_MODULE_RLIMIT_NOFILE', variables=task_vars)
+
+        if not isinstance(rlimit_nofile, int):
+            rlimit_nofile = int(templar.template(rlimit_nofile))
+
+        if rlimit_nofile:
+            rlimit = ANSIBALLZ_RLIMIT_TEMPLATE % dict(
+                rlimit_nofile=rlimit_nofile,
+            )
+        else:
+            rlimit = ''
 
         coverage_config = os.environ.get('_ANSIBLE_COVERAGE_CONFIG')
 
@@ -787,6 +853,7 @@ def _find_module_utils(module_name, b_module_data, module_path, module_args, tas
             minute=now.minute,
             second=now.second,
             coverage=coverage,
+            rlimit=rlimit,
         )))
         b_module_data = output.getvalue()
 
