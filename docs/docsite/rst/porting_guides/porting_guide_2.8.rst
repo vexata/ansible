@@ -193,6 +193,19 @@ Deprecated
      removed in 2.12.  If you need the old behaviour switch to ``FactCache.first_order_merge()``
      instead.
 
+* Supporting file-backed caching via self.cache is deprecated and will
+  be removed in Ansible 2.12. If you maintain an inventory plugin, update it to use ``self._cache`` as a dictionary. For implementation details, see
+  the :ref:`developer guide on inventory plugins<inventory_plugin_caching>`.
+
+* Importing cache plugins directly is deprecated and will be removed in Ansible 2.12. Use the plugin_loader
+  so direct options, environment variables, and other means of configuration can be reconciled using the config
+  system rather than constants.
+
+  .. code-block:: python
+
+     from ansible.plugins.loader import cache_loader
+     cache = cache_loader.get('redis', **kwargs)
+
 Modules
 =======
 
@@ -203,10 +216,6 @@ This may mean that custom modules can fail if they implicitly relied on this beh
 add ``$ErrorActionPreference = "Continue"`` to the top of the module. This change was made to restore the old behaviour
 of the EAP that was accidentally removed in a previous release and ensure that modules are more resiliant to errors
 that may occur in execution.
-
-PowerShell module options and option choices are currently case insensitive to what is defined in the module
-specification. This behaviour is deprecated and a warning displayed to the user if a case insensitive match was found.
-A future release of Ansible will make these checks case sensitive.
 
 Modules removed
 ---------------
@@ -224,12 +233,12 @@ Deprecation notices
 
 The following modules will be removed in Ansible 2.12. Please update your playbooks accordingly.
 
-* ``foreman`` use <https://github.com/theforeman/foreman-ansible-modules> instead.
-* ``katello`` use <https://github.com/theforeman/foreman-ansible-modules> instead.
+* ``foreman`` use `foreman-ansible-modules <https://github.com/theforeman/foreman-ansible-modules>`_ instead.
+* ``katello`` use `foreman-ansible-modules <https://github.com/theforeman/foreman-ansible-modules>`_ instead.
 * ``github_hooks`` use :ref:`github_webhook <github_webhook_module>` and :ref:`github_webhook_facts <github_webhook_facts_module>` instead.
-* ``digital_ocean`` use :ref `digital_ocean_droplet <digital_ocean_droplet_module>` instead.
-* ``gce`` use :ref `gce_compute_instance <gce_compute_instance_module>` instead.
-* ``panos`` use `Ansible Galaxy role <https://galaxy.ansible.com/PaloAltoNetworks/paloaltonetworks>`_ instead.
+* ``digital_ocean`` use :ref:`digital_ocean_droplet <digital_ocean_droplet_module>` instead.
+* ``gce`` use :ref:`gcp_compute_instance <gcp_compute_instance_module>` instead.
+* ``panos`` use the `Palo Alto Networks Ansible Galaxy role <https://galaxy.ansible.com/PaloAltoNetworks/paloaltonetworks>`_ instead.
 
 
 Noteworthy module changes
@@ -284,7 +293,7 @@ Noteworthy module changes
 
 * The ``docker_service`` module was renamed to :ref:`docker_compose <docker_compose_module>`.
 * The renamed ``docker_compose`` module used to return one fact per service, named same as the service. A dictionary
-  of these facts is returned as the regular return value ``service_facts``. The returned facts will be removed in
+  of these facts is returned as the regular return value ``services``. The returned facts will be removed in
   Ansible 2.12.
 
 * The ``docker_swarm_service`` module no longer sets a defaults for the following options:
@@ -295,13 +304,44 @@ Noteworthy module changes
 * ``vmware_vm_facts`` used to return dict of dict with virtual machine's facts. Ansible 2.8 and onwards will return list of dict with virtual machine's facts.
   Please see module ``vmware_vm_facts`` documentation for example.
 
+* ``vmware_guest_snapshot`` module used to return ``results``. Since Ansible 2.8 and onwards ``results`` is a reserved keyword, it is replaced by ``snapshot_results``.
+  Please see module ``vmware_guest_snapshots`` documentation for example.
+
 * The ``panos`` modules have been deprecated in favor of using the Palo Alto Networks `Ansible Galaxy role
   <https://galaxy.ansible.com/PaloAltoNetworks/paloaltonetworks>`_.  Contributions to the role can be made
   `here <https://github.com/PaloAltoNetworks/ansible-pan>`_.
 
+* The ``ipa_user`` module originally always sent ``password`` to FreeIPA regardless of whether the password changed. Now the module only sends ``password`` if ``update_password`` is set to ``always``, which is the default.
+
+* The ``win_psexec`` has deprecated the undocumented ``extra_opts`` module option. This will be removed in Ansible 2.10.
+
+* The ``win_nssm`` module has deprecated the following options in favor of using the ``win_service`` module to configure the service after installing it with ``win_nssm``:
+  * ``dependencies``, use ``dependencies`` of ``win_service`` instead
+  * ``start_mode``, use ``start_mode`` of ``win_service`` instead
+  * ``user``, use ``username`` of ``win_service`` instead
+  * ``password``, use ``password`` of ``win_service`` instead
+  These options will be removed in Ansible 2.12.
+
+* The ``win_nssm`` module has also deprecated the ``start``, ``stop``, and ``restart`` values of the ``status`` option.
+  You should use the ``win_service`` module to control the running state of the service. This will be removed in Ansible 2.12.
+
+* The ``status`` module option for ``win_nssm`` has changed its default value to ``present``. Before, the default was ``start``.
+  Consequently, the service is no longer started by default after creation with ``win_nssm``, and you should use
+  the ``win_service`` module to start it if needed.
+
+* The ``app_parameters`` module option for ``win_nssm`` has been deprecated; use ``argument`` instead. This will be removed in Ansible 2.12.
+
+* The ``app_parameters_free_form`` module option for ``win_nssm`` has been aliased to the new ``arguments`` option.
+
+* The ``win_dsc`` module will now validate the input options for a DSC resource. In previous versions invalid options
+  would be ignored but are now not.
+
+* The ``openssl_pkcs12`` module will now regenerate the pkcs12 file if there are differences between the file on disk and the parameters passed to the module.
 
 Plugins
 =======
+
+* Ansible no longer defaults to the ``paramiko`` connection plugin when using macOS as the control node. Ansible will now use the ``ssh`` connection plugin by default on a macOS control node.  Since ``ssh`` supports connection persistence between tasks and playbook runs, it performs better than ``paramiko``. If you are using password authentication, you will need to install ``sshpass`` when using the ``ssh`` connection plugin. Or you can explicitly set the connection type to ``paramiko`` to maintain the pre-2.8 behavior on macOS.
 
 * Connection plugins have been standardized to allow use of ``ansible_<conn-type>_user``
   and ``ansible_<conn-type>_password`` variables.  Variables such as
@@ -333,6 +373,8 @@ Plugins
 * Play recap now counts ``ignored`` and ``rescued`` tasks as well as ``ok``, ``changed``, ``unreachable``, ``failed`` and ``skipped`` tasks, thanks to two additional stat counters in the ``default`` callback plugin. Tasks that fail and have ``ignore_errors: yes`` set are listed as ``ignored``. Tasks that fail and then execute a rescue section are listed as ``rescued``. Note that ``rescued`` tasks are no longer counted as ``failed`` as in Ansible 2.7 (and earlier).
 
 * ``osx_say`` callback plugin was renamed into :ref:`say <say_callback>`.
+
+* Inventory plugins now support caching via cache plugins. To start using a cache plugin with your inventory see the section on caching in the :ref:`inventory guide<using_inventory>`. To port a custom cache plugin to be compatible with inventory see :ref:`developer guide on cache plugins<developing_cache_plugins>`.
 
 Porting custom scripts
 ======================

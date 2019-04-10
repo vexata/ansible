@@ -69,6 +69,11 @@ options:
        - List of SSH public keys.
        - Use the full content of your .pub file here.
     type: list
+  password:
+    description:
+       - Password for the server.
+    type: str
+    version_added: '2.8'
   use_public_network:
     description:
       - Attach a public network interface to the server.
@@ -375,21 +380,11 @@ class AnsibleCloudscaleServer(AnsibleCloudscaleBase):
 
     def _create_server(self, server_info):
         self._result['changed'] = True
-        required_params = ('name', 'ssh_keys', 'image', 'flavor')
-        self._module.fail_on_missing_params(required_params)
-        params = self._module.params
-        data = {
-            'name': params['name'],
-            'image': params['image'],
-            'flavor': params['flavor'],
-            'volume_size_gb': params['volume_size_gb'],
-            'bulk_volume_size_gb': params['bulk_volume_size_gb'],
-            'ssh_keys': params['ssh_keys'],
-            'use_public_network': params['use_public_network'],
-            'use_ipv6': params['use_ipv6'],
-            'anti_affinity_with': params['anti_affinity_with'],
-            'user_data': params['user_data'],
-        }
+
+        data = deepcopy(self._module.params)
+        for i in ('uuid', 'state', 'force', 'api_timeout', 'api_token'):
+            del data[i]
+
         self._result['diff']['before'] = self._init_server_container()
         self._result['diff']['after'] = deepcopy(data)
         if not self._module.check_mode:
@@ -451,6 +446,7 @@ def main():
         volume_size_gb=dict(type='int', default=10),
         bulk_volume_size_gb=dict(type='int'),
         ssh_keys=dict(type='list'),
+        password=dict(no_log=True),
         use_public_network=dict(type='bool', default=True),
         use_private_network=dict(type='bool', default=False),
         use_ipv6=dict(type='bool', default=True),
