@@ -1,7 +1,7 @@
 #!/usr/bin/python
 # -*- coding: utf-8 -*-
 
-# Copyright: (c) 2018, Sandeep Kasargod (sandeep@vexata.com)
+# Copyright: (c) 2019, Sandeep Kasargod (sandeep@vexata.com)
 # GNU General Public License v3.0+ (see COPYING or https://www.gnu.org/licenses/gpl-3.0.txt)
 
 from __future__ import absolute_import, division, print_function
@@ -13,7 +13,7 @@ ANSIBLE_METADATA = {'metadata_version': '1.1',
                     'supported_by': 'community'}
 
 
-DOCUMENTATION = '''
+DOCUMENTATION = r'''
 ---
 module: vexata_fcinitiator
 version_added: 2.8
@@ -27,6 +27,7 @@ options:
     description:
     - Initiator name.
     required: true
+    type: str
   state:
     description:
     - Add initiator when present or remove when absent.
@@ -34,14 +35,16 @@ options:
       without first deleting those initiator groups.
     default: present
     choices: [ present, absent ]
+    type: str
   wwn:
     description:
     - FC wwn of Host HBA port for adding a new initiator.
+    type: str
 extends_documentation_fragment:
     - vexata.vx100
 '''
 
-EXAMPLES = '''
+EXAMPLES = r'''
 - name: Add initiator named host1fc1 for host HBA port
   vexata_initiator:
     name: host1fc1
@@ -60,7 +63,7 @@ EXAMPLES = '''
     password: secret
 '''
 
-RETURN = '''
+RETURN = r'''
 '''
 
 import re
@@ -141,7 +144,7 @@ def main():
     arg_spec.update(
         dict(
             name=dict(type='str', required=True),
-            state=dict(default='present', choices=['present', 'absent']),
+            state=dict(type='str', default='present', choices=['present', 'absent']),
             wwn=dict(type='str')
         )
     )

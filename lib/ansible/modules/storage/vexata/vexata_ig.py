@@ -1,7 +1,7 @@
 #!/usr/bin/python
 # -*- coding: utf-8 -*-
 
-# Copyright: (c) 2018, Sandeep Kasargod (sandeep@vexata.com)
+# Copyright: (c) 2019, Sandeep Kasargod (sandeep@vexata.com)
 # GNU General Public License v3.0+ (see COPYING or https://www.gnu.org/licenses/gpl-3.0.txt)
 
 from __future__ import absolute_import, division, print_function
@@ -13,7 +13,7 @@ ANSIBLE_METADATA = {'metadata_version': '1.1',
                     'supported_by': 'community'}
 
 
-DOCUMENTATION = '''
+DOCUMENTATION = r'''
 ---
 module: vexata_ig
 version_added: 2.8
@@ -27,6 +27,7 @@ options:
     description:
       - Initiator group name.
     required: true
+    type: str
   state:
     description:
     - Creates/Modifies initiator group when present or delete when absent.
@@ -34,19 +35,22 @@ options:
       without first deleting those export groups.
     default: present
     choices: [ present, absent ]
+    type: str
   initiators:
     description:
     - List of initiator names.
+    type: list
   hostprofile:
     description:
     - Profile for host OS related differences.
     default: none
     choices: [ none, hpux, aix ]
+    type: str
 extends_documentation_fragment:
     - vexata.vx100
 '''
 
-EXAMPLES = '''
+EXAMPLES = r'''
 - name: Create initiator group named dbhosts with two initiators.
   vexata_ig:
     name: dbhosts
@@ -79,7 +83,7 @@ EXAMPLES = '''
     password: secret
 '''
 
-RETURN = '''
+RETURN = r'''
 '''
 
 from ansible.module_utils.basic import AnsibleModule
@@ -209,9 +213,9 @@ def main():
     arg_spec.update(
         dict(
             name=dict(type='str', required=True),
-            state=dict(default='present', choices=['present', 'absent']),
+            state=dict(type='str', default='present', choices=['present', 'absent']),
             initiators=dict(type='list'),
-            hostprofile=dict(default='none', choices=['none', 'hpux', 'aix'])
+            hostprofile=dict(type='str', default='none', choices=['none', 'hpux', 'aix'])
         )
     )
 

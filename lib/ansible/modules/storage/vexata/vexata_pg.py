@@ -1,7 +1,7 @@
 #!/usr/bin/python
 # -*- coding: utf-8 -*-
 
-# Copyright: (c) 2018, Sandeep Kasargod (sandeep@vexata.com)
+# Copyright: (c) 2019, Sandeep Kasargod (sandeep@vexata.com)
 # GNU General Public License v3.0+ (see COPYING or https://www.gnu.org/licenses/gpl-3.0.txt)
 
 from __future__ import absolute_import, division, print_function
@@ -13,7 +13,7 @@ ANSIBLE_METADATA = {'metadata_version': '1.1',
                     'supported_by': 'community'}
 
 
-DOCUMENTATION = '''
+DOCUMENTATION = r'''
 ---
 module: vexata_pg
 version_added: 2.8
@@ -27,6 +27,7 @@ options:
     description:
       - Port group name.
     required: true
+    type: str
   state:
     description:
     - Creates/Modifies port group when present or delete when absent.
@@ -34,14 +35,16 @@ options:
       without first deleting those export groups.
     default: present
     choices: [ present, absent ]
+    type: str
   ports:
     description:
     - List of array port ids, the port id range is 0-15.
+    type: list
 extends_documentation_fragment:
     - vexata.vx100
 '''
 
-EXAMPLES = '''
+EXAMPLES = r'''
 - name: Create port group named pg1 with four ports.
   vexata_pg:
     name: pg1
@@ -79,7 +82,7 @@ EXAMPLES = '''
     password: secret
 '''
 
-RETURN = '''
+RETURN = r'''
 '''
 
 from ansible.module_utils.basic import AnsibleModule
@@ -206,7 +209,7 @@ def main():
     arg_spec.update(
         dict(
             name=dict(type='str', required=True),
-            state=dict(default='present', choices=['present', 'absent']),
+            state=dict(type='str', default='present', choices=['present', 'absent']),
             ports=dict(type='list')
         )
     )

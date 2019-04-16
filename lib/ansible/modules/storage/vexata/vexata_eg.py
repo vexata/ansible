@@ -1,7 +1,7 @@
 #!/usr/bin/python
 # -*- coding: utf-8 -*-
 
-# Copyright: (c) 2018, Sandeep Kasargod (sandeep@vexata.com)
+# Copyright: (c) 2019, Sandeep Kasargod (sandeep@vexata.com)
 # GNU General Public License v3.0+ (see COPYING or https://www.gnu.org/licenses/gpl-3.0.txt)
 
 from __future__ import absolute_import, division, print_function
@@ -13,7 +13,7 @@ ANSIBLE_METADATA = {'metadata_version': '1.1',
                     'supported_by': 'community'}
 
 
-DOCUMENTATION = '''
+DOCUMENTATION = r'''
 ---
 module: vexata_eg
 version_added: 2.8
@@ -30,25 +30,30 @@ options:
     description:
       - Export group name.
     required: true
+    type: str
   state:
     description:
     - Creates export group when present or delete when absent.
     default: present
     choices: [ present, absent ]
+    type: str
   vg:
     description:
     - Volume group name.
+    type: str
   ig:
     description:
     - Initiator group name.
+    type: str
   pg:
     description:
     - Port group name.
+    type: str
 extends_documentation_fragment:
     - vexata.vx100
 '''
 
-EXAMPLES = '''
+EXAMPLES = r'''
 - name: Create export group named db_export.
   vexata_eg:
     name: db_export
@@ -69,7 +74,7 @@ EXAMPLES = '''
     password: secret
 '''
 
-RETURN = '''
+RETURN = r'''
 '''
 
 from ansible.module_utils.basic import AnsibleModule
@@ -182,7 +187,7 @@ def main():
     arg_spec.update(
         dict(
             name=dict(type='str', required=True),
-            state=dict(default='present', choices=['present', 'absent']),
+            state=dict(type='str', default='present', choices=['present', 'absent']),
             vg=dict(type='str'),
             ig=dict(type='str'),
             pg=dict(type='str')

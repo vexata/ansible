@@ -1,7 +1,7 @@
 #!/usr/bin/python
 # -*- coding: utf-8 -*-
 
-# Copyright: (c) 2018, Sandeep Kasargod (sandeep@vexata.com)
+# Copyright: (c) 2019, Sandeep Kasargod (sandeep@vexata.com)
 # GNU General Public License v3.0+ (see COPYING or https://www.gnu.org/licenses/gpl-3.0.txt)
 
 from __future__ import absolute_import, division, print_function
@@ -13,7 +13,7 @@ ANSIBLE_METADATA = {'metadata_version': '1.1',
                     'supported_by': 'community'}
 
 
-DOCUMENTATION = '''
+DOCUMENTATION = r'''
 ---
 module: vexata_sg
 version_added: 2.8
@@ -34,10 +34,12 @@ options:
     description:
     - Snapshot group name.
     required: true
+    type: str
   vg:
     description:
     - Name of the volume group parent from which the snapshot group is created.
     required: true
+    type: str
   state:
     description:
     - Create a readonly snapshot group when present, delete when absent.
@@ -45,14 +47,16 @@ options:
     - Restore a volume group to the snapshot group's state when restore.
     default: present
     choices: [ present, absent, clone, restore ]
+    type: str
   target:
     description:
     - Name of volume group to be cloned from the snapshot.
+    type: str
 extends_documentation_fragment:
     - vexata.vx100
 '''
 
-EXAMPLES = '''
+EXAMPLES = r'''
 - name: Create a new snapshot group named testvgnap from a parent vg named testvg.
   vexata_sg:
     name: testvgsnap
@@ -91,7 +95,7 @@ EXAMPLES = '''
     password: secret
 '''
 
-RETURN = '''
+RETURN = r'''
 '''
 
 from ansible.module_utils.basic import AnsibleModule
@@ -226,7 +230,7 @@ def main():
         dict(
             name=dict(type='str', required=True),
             vg=dict(type='str', required=True),
-            state=dict(default='present', choices=['present', 'absent', 'clone', 'restore']),
+            state=dict(type='str', default='present', choices=['present', 'absent', 'clone', 'restore']),
             target=dict(type='str')
         )
     )
