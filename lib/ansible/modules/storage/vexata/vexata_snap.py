@@ -16,7 +16,7 @@ ANSIBLE_METADATA = {'metadata_version': '1.1',
 DOCUMENTATION = r'''
 ---
 module: vexata_snap
-version_added: 2.8
+version_added: 2.9
 short_description: Manage volume snapshots and clones on Vexata VX100 storage arrays
 description:
     - Create or delete a readonly point-in-time snapshot of a volume.

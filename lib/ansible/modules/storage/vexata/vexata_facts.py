@@ -16,7 +16,7 @@ ANSIBLE_METADATA = {'metadata_version': '1.1',
 DOCUMENTATION = r'''
 ---
 module: vexata_facts
-version_added: 2.8
+version_added: 2.9
 short_description: Retrieve facts about Vexata VX100 storage arrays
 description:
   - Collect facts from a Vexata VX100 storage array.
